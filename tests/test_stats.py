@@ -119,6 +119,8 @@ def test_quantiles_multiple():
     expected = np.quantile(data, q)
     actual = quantiles(data, q)
 
+    np.testing.assert_allclose(actual, expected)
+
 def test_quantiles_axis():
     data = np.array([[10,20,30], 
                     [40,50,60]])
@@ -160,3 +162,124 @@ def testing_welford_sampleVariance():
     expected = np.var(data, ddof=1)
 
     assert np.isclose(var.variance, expected)
+
+
+# Additional statistics tests (14 cases)
+
+def test_mean_axis_zero():
+    arr = np.array([[1, 2, 3], [4, 5, 6]])
+
+    actual = mean(arr, axis=0)
+
+    np.testing.assert_allclose(actual, [2.5, 3.5, 4.5])
+
+
+def test_mean_keepdims():
+    arr = np.array([[1, 2], [3, 4]])
+
+    actual = mean(arr, axis=1, keepdims=True)
+
+    np.testing.assert_allclose(actual, [[1.5], [3.5]])
+    assert actual.shape == (2, 1)
+
+
+def test_std_axis_zero():
+    arr = np.array([[1, 2], [3, 4]])
+
+    actual = std(arr, axis=0)
+
+    np.testing.assert_allclose(actual, [1.0, 1.0])
+
+
+def test_std_keepdims():
+    arr = np.array([[1, 3], [5, 7]])
+
+    actual = std(arr, axis=1, keepdims=True)
+
+    np.testing.assert_allclose(actual, [[1.0], [1.0]])
+    assert actual.shape == (2, 1)
+
+
+def test_median_odd_number_of_values():
+    arr = np.array([9, 1, 5, 3, 7])
+
+    assert median(arr) == 5
+
+
+def test_minimum_negative_values():
+    arr = np.array([-8, -2, -5, 0])
+
+    assert minimum(arr) == -8
+
+
+def test_maximum_negative_values():
+    arr = np.array([-8, -2, -5, -1])
+
+    assert maximum(arr) == -1
+
+
+def test_histogram_counts_all_values_in_range():
+    data = np.array([1, 2, 3, 4, 5])
+
+    counts, edges = histogram(data, bins=5, bin_range=(1, 5))
+
+    assert counts.sum() == len(data)
+    assert len(edges) == 6
+
+
+def test_quantiles_lower_and_upper():
+    data = np.array([10, 20, 30, 40, 50])
+
+    actual = quantiles(data, [0.0, 1.0])
+
+    np.testing.assert_allclose(actual, [10, 50])
+
+
+def test_quantiles_keep_nan_handling():
+    data = np.array([1.0, np.nan, 3.0])
+
+    actual = quantiles(data, 0.5, handle_nan=True)
+
+    assert actual == 2.0
+
+
+def test_welford_updates_in_batches():
+    first_batch = np.array([1.0, 2.0, 3.0])
+    second_batch = np.array([4.0, 5.0])
+    stats = WelfordStats()
+
+    stats.update(first_batch)
+    stats.update(second_batch)
+
+    expected = np.mean([1.0, 2.0, 3.0, 4.0, 5.0])
+
+    assert np.isclose(stats.mean_, expected)
+
+
+def test_welford_single_update_at_a_time():
+    data = [2.0, 4.0, 6.0]
+    stats = WelfordStats()
+
+    for value in data:
+        stats.update(np.array([value]))
+
+    assert np.isclose(stats.mean_, np.mean(data))
+
+
+def test_welford_variance_after_multiple_batches():
+    stats = WelfordStats()
+    stats.update(np.array([1.0, 2.0]))
+    stats.update(np.array([3.0, 4.0]))
+
+    expected = np.var([1.0, 2.0, 3.0, 4.0], ddof=1)
+
+    assert np.isclose(stats.variance, expected)
+
+
+def test_welford_mean_with_negative_values():
+    data = np.array([-5.0, -1.0, 3.0])
+    stats = WelfordStats()
+
+    stats.update(data)
+
+    assert np.isclose(stats.mean_, np.mean(data))
