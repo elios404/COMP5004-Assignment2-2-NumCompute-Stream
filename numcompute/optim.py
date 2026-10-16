@@ -17,10 +17,25 @@ def grad(
     Estimate gradient of a scalar function f at vector point x.
     Supported methods: 'central', 'forward'.
     """
-    # TODO: Finite-difference approximation of gradient vector
-    raise NotImplementedError
+    arr = np.asarray(x, dtype=float)
+    gradient = np.zeros(arr.size)
 
+    if method not in ("central", "forward"):
+        raise ValueError("the method has to be either Central or Forward")
 
+    for i in range(arr.size):
+        x_plus = arr.copy()
+        x_plus[i] += h
+
+        if method == 'central':
+            x_minus = arr.copy()
+            x_minus[i] -= h
+            gradient[i] = (f(x_plus) - f(x_minus)) / (2 * h)
+        else:
+            gradient[i] = (f(x_plus) - f(arr)) / h
+
+    return gradient
+    
 def jacobian(
     F: Callable[[np.ndarray], np.ndarray],
     x: np.ndarray,
@@ -31,5 +46,23 @@ def jacobian(
     Estimate Jacobian matrix of vector-valued function F at point x.
     Output shape: (output_dim, input_dim)
     """
-    # TODO: Finite-difference approximation of Jacobian matrix
-    raise NotImplementedError
+    output = F(x)
+    arr = np.asarray(x, dtype=float)
+    jacobian_matrx = np.zeros((output.size, arr.size))
+    
+    if method not in ("central", "forward"):
+        raise ValueError("the method has to be either Central or Forward")
+    
+    for i in range(arr.size):
+        x_plus = arr.copy()
+        x_plus[i] += h
+    
+        if method == 'central':
+            x_minus = arr.copy()
+            x_minus[i] -= h
+            jacobian_matrx[:, i] = (F(x_plus) - F(x_minus)) / (2 * h)
+        else:
+            jacobian_matrx[:, i] = (F(x_plus) - output) / h
+    
+    return jacobian_matrx
+    

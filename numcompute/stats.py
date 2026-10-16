@@ -8,30 +8,23 @@ import numpy as np
 
 
 def mean(arr: np.ndarray, axis: Optional[int] = None, keepdims: bool = False) -> np.ndarray:
-    # TODO: Compute mean along specified axis
-    raise NotImplementedError
-
+    return np.mean(arr, axis=axis, keepdims=keepdims)
+    
 
 def std(arr: np.ndarray, axis: Optional[int] = None, ddof: int = 0, keepdims: bool = False) -> np.ndarray:
-    # TODO: Compute standard deviation along specified axis
-    raise NotImplementedError
+    return np.std(arr, axis=axis, keepdims=keepdims, ddof=ddof)
 
 
 def median(arr: np.ndarray, axis: Optional[int] = None, keepdims: bool = False) -> np.ndarray:
-    # TODO: Compute median along specified axis
-    raise NotImplementedError
+    return np.median(arr, axis=axis, keepdims=keepdims)
 
 
 def minimum(arr: np.ndarray, axis: Optional[int] = None, keepdims: bool = False) -> np.ndarray:
-    """Compute the minimum of an array along a specified axis."""
-    # TODO: Calculate minimum along axis with shape consistency
-    raise NotImplementedError
+    return np.min(arr, axis=axis, keepdims=keepdims)
 
 
 def maximum(arr: np.ndarray, axis: Optional[int] = None, keepdims: bool = False) -> np.ndarray:
-    """Compute the maximum of an array along a specified axis."""
-    # TODO: Calculate maximum along axis with shape consistency
-    raise NotImplementedError
+    return np.max(arr, axis=axis, keepdims=keepdims)
 
 
 def histogram(
@@ -39,10 +32,11 @@ def histogram(
     bins: int = 10,
     bin_range: Optional[Tuple[float, float]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Returns: (counts, bin_edges)"""
-    # TODO: Compute histogram counts and bin edges
-    raise NotImplementedError
+    counts, bin_edges = np.histogram(
+        data, bins=bins, range=bin_range
+    )
 
+    return counts, bin_edges
 
 def quantiles(
     data: np.ndarray,
@@ -51,9 +45,10 @@ def quantiles(
     handle_nan: bool = True,
 ) -> np.ndarray:
     """Compute quantiles with optional NaN handling."""
-    # TODO: Handle NaNs and calculate quantiles
-    raise NotImplementedError
-
+    if handle_nan:
+        return np.nanquantile(data, q, axis=axis)
+    else:
+        return np.quantile(data, q, axis=axis)
 
 class WelfordStats:
     """Online streaming calculation of mean and variance via Welford's algorithm."""
@@ -64,10 +59,21 @@ class WelfordStats:
         self.M2 = 0.0
 
     def update(self, x: Union[float, np.ndarray]) -> None:
-        # TODO: Update running mean and M2 using Welford's recurrence
-        raise NotImplementedError
+        values = np.asarray(x).ravel()
+
+        for value in values:
+            self.count += 1
+
+            diff1 = value - self.mean_
+            self.mean_ += diff1 / self.count
+            diff2 = value - self.mean_
+
+            self.M2 += diff1 * diff2
+
 
     @property
     def variance(self) -> float:
-        # TODO: Return sample variance
-        raise NotImplementedError
+        if self.count < 2:
+            raise ValueError("Error: Atleast two observations needed")
+
+        return self.M2 / (self.count-1)
