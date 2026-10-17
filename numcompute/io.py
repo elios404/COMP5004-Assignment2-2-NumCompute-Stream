@@ -63,13 +63,13 @@ def load_csv(
         dtype=dtype,
         missing_values=missing_values,
         filling_values=fill_value,
+        ndmin=2,
     )
 
-    if data.size == 0: # empty file or no valid data
+    if data.size == 0:
         return np.empty((0, 0), dtype=dtype)
 
-    # in case of a single row, ensure the output is 2D
-    return np.atleast_2d(data) 
+    return data
 
 
 def load_csv_chunks(
