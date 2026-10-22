@@ -1,0 +1,4 @@
+Python: 3.14.7
+NumPy: 2.5.4
+Platform: Windows-11-10.0.26200-SP0
+Machine: AMD64
