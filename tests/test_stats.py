@@ -145,7 +145,7 @@ def test_quantiles_nan_not_handled():
 
     assert np.isnan(actual)
 
-def testing_welford_mean():
+def test_welford_mean():
     data = np.array([1, 3, 5, 7, 9])
     compute_mean = WelfordStats()
 
@@ -153,7 +153,7 @@ def testing_welford_mean():
 
     assert np.isclose(compute_mean.mean_, np.mean(data))
 
-def testing_welford_sampleVariance():
+def test_welford_sampleVariance():
     data = np.array([1, 3, 5, 7, 9])
     var = WelfordStats()
 

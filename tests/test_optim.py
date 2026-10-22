@@ -47,14 +47,6 @@ def test_jacobian_forward():
     np.testing.assert_allclose(result, [4.0, 6.0], atol=1e-4)
 
 
-import numpy as np
-import pytest
-
-from numcompute.optim import grad, jacobian
-
-
-
-
 def test_central_diff_linear_function():
     def f(x):
         return 2 * x[0] + 3 * x[1]

@@ -63,6 +63,8 @@ def grad(
     if method not in ("central", "forward"):
         raise ValueError("the method has to be either Central or Forward")
 
+    calced_value = f(arr)
+
     for i in range(arr.size):
         x_plus = arr.copy()
         x_plus[i] += h
@@ -72,7 +74,7 @@ def grad(
             x_minus[i] -= h
             gradient[i] = (f(x_plus) - f(x_minus)) / (2 * h)
         else:
-            gradient[i] = (f(x_plus) - f(arr)) / h
+            gradient[i] = (f(x_plus) - calced_value) / h
 
     return gradient
     
@@ -126,7 +128,7 @@ def jacobian(
     """
     output = F(x)
     arr = np.asarray(x, dtype=float)
-    jacobian_matrx = np.zeros((output.size, arr.size))
+    jacobian_matrix = np.zeros((output.size, arr.size))
     
     if method not in ("central", "forward"):
         raise ValueError("the method has to be either Central or Forward")
@@ -138,9 +140,9 @@ def jacobian(
         if method == 'central':
             x_minus = arr.copy()
             x_minus[i] -= h
-            jacobian_matrx[:, i] = (F(x_plus) - F(x_minus)) / (2 * h)
+            jacobian_matrix[:, i] = (F(x_plus) - F(x_minus)) / (2 * h)
         else:
-            jacobian_matrx[:, i] = (F(x_plus) - output) / h
+            jacobian_matrix[:, i] = (F(x_plus) - output) / h
     
-    return jacobian_matrx
+    return jacobian_matrix
     
