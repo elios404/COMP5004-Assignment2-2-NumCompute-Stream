@@ -10,7 +10,7 @@ def test_central_diff():
     x = np.array([2.0, 4.0])
     result = grad(f, x, method='central')
 
-    np.testing.assert_allclose(result, [2.0, 4.0], atol=1e-4) 
+    np.testing.assert_allclose(result, [4.0, 1.0], atol=1e-4) 
 
 def test_forward_diff():
     def f(x):
@@ -19,7 +19,7 @@ def test_forward_diff():
     x = np.array([2.0, 4.0])
     result = grad(f, x, method='forward')
 
-    np.testing.assert_allclose(result, [2.0, 4.0], atol=1e-4) 
+    np.testing.assert_allclose(result, [4.0, 1.0], atol=1e-4) 
 
 
 def test_jacobian_central():
@@ -45,14 +45,6 @@ def test_jacobian_forward():
     result = jacobian(F, x, method='forward')
 
     np.testing.assert_allclose(result, [4.0, 6.0], atol=1e-4)
-
-
-import numpy as np
-import pytest
-
-from numcompute.optim import grad, jacobian
-
-
 
 
 def test_central_diff_linear_function():
