@@ -94,6 +94,8 @@ def topk(
 ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
     """Select the k largest/smallest values via partial sort.
 
+    Ties are selected and returned in original flattened index order.
+
     Parameters
     values : np.ndarray
         Input array of any shape
@@ -115,8 +117,8 @@ def topk(
         If `k` is negative.
 
     Complexity
-    Time O(n) + O(klogk) for `np.argpartition` and k selected elements. 
-    Space O(n) + O(k) for the flattened copy and the output.
+    Time O(n + k log k) using partial selection and sorting the k selected values.
+    Space O(n + k) for partition indices, boundary comparisons and the output.
     """
     arr = np.asarray(values).ravel()
     n = arr.size
@@ -126,22 +128,26 @@ def topk(
 
     if k == 0:
         idx = np.array([], dtype=int)
-    elif largest:
-        kth = n - k
-        idx = np.argpartition(arr, kth)[kth:]
     else:
-        idx = np.argpartition(arr, k - 1)[:k]
+        kth = n - k if largest else k - 1
+        partitioned = np.argpartition(arr, kth)
+        cutoff = arr[partitioned[kth : kth + 1]]
+        selected = partitioned[kth:] if largest else partitioned[:k]
 
-    selected_values = arr[idx]
-    order = np.argsort(selected_values, kind="stable")
-    if largest:
-        order = order[::-1]
+        tied = (
+            np.searchsorted(cutoff, arr, side="left")
+            != np.searchsorted(cutoff, arr, side="right")
+        )
+        strictly_selected = selected[~tied[selected]]
+        boundary_indices = np.flatnonzero(tied)[:k - strictly_selected.size]
+        idx = np.sort(np.concatenate((strictly_selected, boundary_indices)))
 
-    topk_values = selected_values[order]
-    topk_indices = None
-    if return_indices:
-        topk_indices = idx[order]
-    return topk_values, topk_indices
+        if largest:
+            idx = idx[::-1]
+        order = np.argsort(arr[idx], kind="stable")
+        idx = idx[order[::-1] if largest else order]
+
+    return arr[idx], idx if return_indices else None
 
 
 def quickselect(arr: np.ndarray, k: int) -> float:

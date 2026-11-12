@@ -137,7 +137,23 @@ class TestTopK:
         values = np.array([4, 4, 4, 4])
         vals, idx = topk(values, k=2, largest=True)
         np.testing.assert_array_equal(vals, [4, 4])
-        np.testing.assert_array_equal(values[idx], vals)
+        np.testing.assert_array_equal(idx, [0, 1])
+
+    def test_largest_ties_keep_original_order_when_all_are_selected(self):
+        _, idx = topk([5, 5, 5], k=3)
+        np.testing.assert_array_equal(idx, [0, 1, 2])
+
+    @pytest.mark.parametrize(("largest", "expected"), [(True, [3, 0, 2]), (False, [1, 0, 2])])
+    def test_ties_at_selection_boundary_prefer_earlier_indices(self, largest, expected):
+        values = np.array([5, 1, 5, 9, 5])
+        vals, idx = topk(values, k=3, largest=largest)
+        np.testing.assert_array_equal(idx, expected)
+        np.testing.assert_array_equal(vals, values[expected])
+
+    def test_nan_ties_at_selection_boundary_prefer_earlier_indices(self):
+        vals, idx = topk([np.nan, 3.0, np.nan, np.nan], k=2)
+        np.testing.assert_array_equal(idx, [0, 2])
+        assert np.isnan(vals).all()
 
     def test_non_contiguous_input(self):
         backing = np.array([9, 1, 8, 2, 7, 3, 6, 4])

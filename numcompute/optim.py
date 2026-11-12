@@ -14,10 +14,6 @@ def grad(
     method: str = "central",
 ) -> np.ndarray:
     """
-    Estimate gradient of a scalar function f at vector point x.
-    Supported methods: 'central', 'forward'.
-    """
-    """
     Estimate the gradient of a scalar-valued function using
     finite differences.
 
@@ -30,7 +26,7 @@ def grad(
         Input point with shape (D,), where D is the number
         of input variables.
     h : float, optional
-        Positive perturbation step size. Default is 1e-5.
+        Finite, positive perturbation step size. Default is 1e-5.
     method : {"central", "forward"}, optional
         Finite-difference method. Default is "central".
 
@@ -42,7 +38,7 @@ def grad(
     Raises
     ------
     ValueError
-        If method is not "central" or "forward".
+        If h is nonpositive or nonfinite, or method is not "central" or "forward".
 
     Complexity
     ----------
@@ -57,6 +53,9 @@ def grad(
     sides of each coordinate. Forward differences use the current
     point and a positively perturbed point.
     """
+    if not np.isfinite(h) or h <= 0:
+        raise ValueError("h must be a finite, positive step size.")
+
     arr = np.asarray(x, dtype=float)
     gradient = np.zeros(arr.size)
 
@@ -85,11 +84,6 @@ def jacobian(
     method: str = "central",
 ) -> np.ndarray:
     """
-    Estimate Jacobian matrix of vector-valued function F at point x.
-    Output shape: (output_dim, input_dim)
-    """
-
-    """
     Estimate the Jacobian matrix of a vector-valued function
     using finite differences.
 
@@ -102,7 +96,7 @@ def jacobian(
         Input point with shape (D,), where D is the number
         of input variables.
     h : float, optional
-        Positive perturbation step size. Default is 1e-5.
+        Finite, positive perturbation step size. Default is 1e-5.
     method : {"central", "forward"}, optional
         Finite-difference method. Default is "central".
 
@@ -115,7 +109,7 @@ def jacobian(
     Raises
     ------
     ValueError
-        If method is not "central" or "forward".
+        If h is nonpositive or nonfinite, or method is not "central" or "forward".
 
     Complexity
     ----------
@@ -126,6 +120,9 @@ def jacobian(
     Auxiliary space: O(M * D + D + M), including the output
     matrix and working arrays, excluding memory used by F.
     """
+    if not np.isfinite(h) or h <= 0:
+        raise ValueError("h must be a finite, positive step size.")
+
     output = F(x)
     arr = np.asarray(x, dtype=float)
     jacobian_matrix = np.zeros((output.size, arr.size))
@@ -143,6 +140,5 @@ def jacobian(
             jacobian_matrix[:, i] = (F(x_plus) - F(x_minus)) / (2 * h)
         else:
             jacobian_matrix[:, i] = (F(x_plus) - output) / h
-    
+
     return jacobian_matrix
-    
