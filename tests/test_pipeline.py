@@ -46,6 +46,16 @@ class MultiplyConstantTransformer(BaseTransformer):
         return X * self.factor
 
 
+class CenteringTransformer:
+    """Fit and transform using the training data's column means."""
+
+    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> None:
+        self.mean_ = np.mean(X, axis=0)
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return X - self.mean_
+
+
 class MockEstimator(BaseEstimator):
     """Simple dummy predictor returning row sums."""
 
@@ -101,6 +111,28 @@ def test_pipeline_with_real_preprocessors():
     assert not np.isnan(X_processed).any()
     assert np.allclose(np.mean(X_processed, axis=0), [0.0, 0.0])
     assert np.allclose(np.std(X_processed, axis=0), [1.0, 1.0])
+
+
+def test_pipeline_fit_accepts_transformer_without_fit_transform():
+    X = np.array([[1.0, 2.0], [3.0, 6.0]])
+    y = np.array([0, 1])
+    pipe = Pipeline([("center", CenteringTransformer()), ("model", MockEstimator())])
+
+    pipe.fit(X, y)
+
+    np.testing.assert_allclose(pipe.predict(X), [-3.0, 3.0])
+
+
+def test_pipeline_fit_transform_accepts_transformers_without_fit_transform():
+    X = np.array([[1.0, 2.0], [3.0, 6.0]])
+    pipe = Pipeline([
+        ("center", CenteringTransformer()),
+        ("double", MultiplyConstantTransformer()),
+        ("center_again", CenteringTransformer()),
+    ])
+
+    np.testing.assert_allclose(pipe.fit_transform(X), [[-2.0, -4.0], [2.0, 4.0]])
+    np.testing.assert_allclose(pipe.transform([[4.0, 5.0]]), [[4.0, 2.0]])
 
 
 def test_pipeline_with_final_estimator():

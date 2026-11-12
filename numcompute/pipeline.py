@@ -112,6 +112,7 @@ class Pipeline:
     Sequentially chain multiple transformers with an optional final estimator.
 
     Intermediate steps must implement `fit` and `transform`.
+    Transformers may provide `fit_transform` to combine those operations.
     The final step can be a transformer (with `transform`) or an estimator (with `predict`).
 
     Parameters
@@ -135,6 +136,17 @@ class Pipeline:
     def named_steps(self) -> Dict[str, Any]:
         """Access pipeline steps by name as a dictionary."""
         return dict(self.steps)
+
+    @staticmethod
+    def _fit_transform_step(
+        step: Any, X: np.ndarray, y: Optional[np.ndarray]
+    ) -> np.ndarray:
+        fit_transform = getattr(step, "fit_transform", None)
+        if callable(fit_transform):
+            return fit_transform(X, y)
+
+        step.fit(X, y)
+        return step.transform(X)
 
     def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None) -> Pipeline:
         """
@@ -160,7 +172,7 @@ class Pipeline:
         X_curr = X
 
         for _, step in self.steps[:-1]:
-            X_curr = step.fit_transform(X_curr, y)
+            X_curr = self._fit_transform_step(step, X_curr, y)
 
         _, last_step = self.steps[-1]
         if hasattr(last_step, "fit"):
@@ -219,13 +231,13 @@ class Pipeline:
         """
         X_curr = X
         for _, step in self.steps[:-1]:
-            X_curr = step.fit_transform(X_curr, y)
+            X_curr = self._fit_transform_step(step, X_curr, y)
 
         name, last_step = self.steps[-1]
         if not hasattr(last_step, "transform"):
             raise AttributeError(f"Final step '{name}' does not implement 'transform'. Cannot call fit_transform.")
 
-        res = last_step.fit_transform(X_curr, y)
+        res = self._fit_transform_step(last_step, X_curr, y)
         self._is_fitted = True
 
         return res
