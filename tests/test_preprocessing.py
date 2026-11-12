@@ -111,6 +111,28 @@ def test_min_max_scaler_invalid_range():
         MinMaxScaler(feature_range=(1.0, 0.0))
 
 
+@pytest.mark.parametrize(
+    ("scaler_class", "options"),
+    [
+        (StandardScaler, {}),
+        (MinMaxScaler, {}),
+        (StandardScaler, {"with_mean": False, "with_std": False}),
+    ],
+)
+def test_scaler_transform_requires_fitted_feature_count(scaler_class, options):
+    scaler = scaler_class(**options).fit([[1.0, 2.0, 3.0], [3.0, 4.0, 5.0]])
+
+    with pytest.raises(ValueError, match="expected 3 features, got 1"):
+        scaler.transform([[2.0]])
+
+    assert scaler.transform([[2.0, 3.0, 4.0]]).shape == (1, 3)
+
+    scaler.fit([[1.0], [3.0]])
+    assert scaler.transform([[2.0]]).shape == (1, 1)
+    with pytest.raises(ValueError, match="expected 1 features, got 3"):
+        scaler.transform([[2.0, 3.0, 4.0]])
+
+
 # ==============================================================================
 # 3. SimpleImputer Tests
 # ==============================================================================

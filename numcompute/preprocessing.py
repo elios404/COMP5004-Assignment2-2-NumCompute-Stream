@@ -21,6 +21,8 @@ class StandardScaler(BaseTransformer):
 
     Attributes
     ----------
+    n_features_in_ : Optional[int]
+        Number of input features recorded during fit.
     mean_ : Optional[np.ndarray]
         Per-feature empirical mean. Shape: (D,)
     scale_ : Optional[np.ndarray]
@@ -30,6 +32,7 @@ class StandardScaler(BaseTransformer):
     def __init__(self, with_mean: bool = True, with_std: bool = True):
         self.with_mean = with_mean
         self.with_std = with_std
+        self.n_features_in_: Optional[int] = None
         self.mean_: Optional[np.ndarray] = None
         self.scale_: Optional[np.ndarray] = None
 
@@ -77,6 +80,7 @@ class StandardScaler(BaseTransformer):
         else:
             self.scale_ = None
 
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -98,21 +102,23 @@ class StandardScaler(BaseTransformer):
         RuntimeError
             If transform is called before fit.
         ValueError
-            If X is not a 2D array.
+            If X is not a 2D array or has a different feature count than the training data.
 
         Complexity
         ----------
         Time: O(N * D)
         Space: O(N * D)
         """
-        if self.with_mean and self.mean_ is None:
-            raise RuntimeError("StandardScaler is not fitted yet.")
-        if self.with_std and self.scale_ is None:
+        if self.n_features_in_ is None:
             raise RuntimeError("StandardScaler is not fitted yet.")
 
         X = np.asarray(X, dtype=np.float64)
         if X.ndim != 2:
             raise ValueError(f"Expected 2D array, got {X.ndim}D array instead.")
+        if X.shape[1] != self.n_features_in_:
+            raise ValueError(
+                f"Feature dimension mismatch: expected {self.n_features_in_} features, got {X.shape[1]}."
+            )
 
         X_out = X.copy()
         if self.with_mean:
@@ -138,6 +144,8 @@ class MinMaxScaler(BaseTransformer):
 
     Attributes
     ----------
+    n_features_in_ : Optional[int]
+        Number of input features recorded during fit.
     data_min_ : Optional[np.ndarray]
         Per-feature minimum seen in the data. Shape: (D,)
     data_max_ : Optional[np.ndarray]
@@ -150,6 +158,7 @@ class MinMaxScaler(BaseTransformer):
         if feature_range[0] >= feature_range[1]:
             raise ValueError("feature_range minimum must be strictly smaller than maximum.")
         self.feature_range = feature_range
+        self.n_features_in_: Optional[int] = None
         self.data_min_: Optional[np.ndarray] = None
         self.data_max_: Optional[np.ndarray] = None
         self.data_range_: Optional[np.ndarray] = None
@@ -193,6 +202,7 @@ class MinMaxScaler(BaseTransformer):
         self.data_range_ = range_.copy()
         self.data_range_[self.data_range_ == 0.0] = 1.0
 
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -214,19 +224,23 @@ class MinMaxScaler(BaseTransformer):
         RuntimeError
             If transform is called before fit.
         ValueError
-            If X is not a 2D array.
+            If X is not a 2D array or has a different feature count than the training data.
 
         Complexity
         ----------
         Time: O(N * D) for vectorised linear scaling.
         Space: O(N * D) to allocate memory for the returned array.
         """
-        if self.data_min_ is None or self.data_range_ is None: # needed for calculating the scaling
+        if self.n_features_in_ is None:
             raise RuntimeError("MinMaxScaler is not fitted yet.")
 
         X = np.asarray(X, dtype=np.float64)
         if X.ndim != 2:
             raise ValueError(f"Expected 2D array, got {X.ndim}D array instead.")
+        if X.shape[1] != self.n_features_in_:
+            raise ValueError(
+                f"Feature dimension mismatch: expected {self.n_features_in_} features, got {X.shape[1]}."
+            )
 
         min_val, max_val = self.feature_range
         norm = (X - self.data_min_) / self.data_range_
