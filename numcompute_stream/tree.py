@@ -27,7 +27,7 @@ def _impurity(y: np.ndarray, criterion: str) -> float:
 
 def _best_split(
     X: np.ndarray, y: np.ndarray, criterion: str = "gini", features: np.ndarray | None = None
-) -> tuple[int, float, float] | None:
+) -> tuple[int, int | float | np.floating, float] | None:
     """Return (feature, threshold, gain) for a split of one node.
 
     X has shape (N, D) and contains finite numeric features. y has shape (N,).
@@ -37,7 +37,7 @@ def _best_split(
     floating-point epsilons are treated as ties. Return None when no split
     reduces impurity beyond that tolerance.
     """
-    X = np.asarray(X, dtype=float)
+    X = np.asarray(X)
     y = np.asarray(y)
 
     if X.ndim != 2 or y.ndim != 1:
@@ -80,10 +80,16 @@ def _best_split(
         if tied.size:
             index = tied[0]
             lower, upper = lower_values[index], upper_values[index]
+            if X.dtype.kind in "iu" and max(abs(int(lower)), abs(int(upper))) >= 2**53:
+                return int(feature_index), int(lower), float(gains[index])
+            if X.dtype.kind in "biu":
+                lower, upper = float(lower), float(upper)
             threshold = lower / 2 + upper / 2
             if not lower <= threshold < upper:
                 threshold = lower
-            return int(feature_index), float(threshold), float(gains[index])
+            if isinstance(threshold, np.generic):
+                threshold = threshold.item()
+            return int(feature_index), threshold, float(gains[index])
 
     return None
 
@@ -92,7 +98,7 @@ def _best_split(
 class _Node:
     class_index: int
     feature: int | None = None
-    threshold: float = 0.0
+    threshold: int | float | np.floating = 0.0
     left: _Node | None = None
     right: _Node | None = None
 
@@ -105,6 +111,9 @@ class DecisionTreeClassifier:
     max_features is the number of columns sampled without replacement per node.
     Use None to search every column. An integer random_state makes sampling
     reproducible across calls to fit.
+
+    Leaves predict the most frequent class. Ties favour the first label in
+    sorted order. Features must be finite real numbers.
     """
 
     def __init__(
@@ -120,7 +129,7 @@ class DecisionTreeClassifier:
             or min_samples_split < 2
         ):
             raise ValueError("min_samples_split must be an integer of at least 2.")
-        if criterion not in ("gini", "entropy"):
+        if not isinstance(criterion, str) or criterion not in ("gini", "entropy"):
             raise ValueError("criterion must be 'gini' or 'entropy'.")
         if max_features is not None and (
             isinstance(max_features, bool) or not isinstance(max_features, Integral) or max_features < 1
@@ -149,7 +158,6 @@ class DecisionTreeClassifier:
         if X.dtype.kind not in "biuf":
             raise ValueError("X must contain real numeric feature values.")
         
-        X = X.astype(float, copy=False)
         if not np.isfinite(X).all():
             raise ValueError("X must contain only finite feature values.")
         
@@ -215,7 +223,23 @@ class DecisionTreeClassifier:
             if node.feature is None:
                 predictions[rows] = node.class_index
             else:
-                left = X[rows, node.feature] <= node.threshold
+                values = X[rows, node.feature]
+                threshold = node.threshold
+                if isinstance(threshold, int) and values.dtype.kind == "f":
+                    # A rounded-up threshold would include values on the right.
+                    values = values.astype(np.result_type(values.dtype, np.float64), copy=False)
+                    rounded = values.dtype.type(threshold)
+                    left = values < rounded if int(rounded) > threshold else values <= rounded
+                elif values.dtype.kind in "iu":
+                    cutoff = threshold if isinstance(threshold, int) else int(np.floor(threshold))
+                    limits = np.iinfo(values.dtype)
+                    if cutoff < limits.min or cutoff > limits.max:
+                        left = np.full(values.shape, cutoff > limits.max)
+                    else:
+                        left = values <= cutoff
+                else:
+                    comparison_dtype = np.result_type(values.dtype, type(threshold))
+                    left = values.astype(comparison_dtype, copy=False) <= threshold
                 pending.append((node.left, rows[left]))
                 pending.append((node.right, rows[~left]))
 

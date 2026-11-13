@@ -148,3 +148,32 @@ def test_tree_validates_feature_sampling_settings():
         DecisionTreeClassifier(max_features=2).fit([[0], [1]], [0, 1])
     with pytest.raises(ValueError, match="random_state"):
         DecisionTreeClassifier(random_state=-1)
+
+
+def test_tree_preserves_adjacent_large_integer_features():
+    for X in (
+        np.array([[2**53], [2**53 + 1]], dtype=np.int64),
+        np.array([[2**64 - 2], [2**64 - 1]], dtype=np.uint64),
+    ):
+        tree = DecisionTreeClassifier().fit(X, [0, 1])
+        np.testing.assert_array_equal(tree.predict(X), [0, 1])
+
+
+def test_tree_keeps_split_boundary_with_mixed_numeric_dtypes():
+    boundary = 2**53
+    tree = DecisionTreeClassifier().fit([[boundary + 3], [boundary + 4]], [0, 1])
+    np.testing.assert_array_equal(tree.predict([[float(boundary + 4)]]), [1])
+
+    tree.fit([[float(boundary)], [float(boundary + 2)]], [0, 1])
+    np.testing.assert_array_equal(tree.predict([[boundary], [boundary + 1]]), [0, 1])
+
+    tree.fit([[0.99999998], [1.0]], [0, 1])
+    np.testing.assert_array_equal(tree.predict(np.array([[1.0]], dtype=np.float32)), [1])
+
+    tree.fit(np.array([[2**64 - 2], [2**64 - 1]], dtype=np.uint64), [0, 1])
+    np.testing.assert_array_equal(tree.predict(np.array([[127]], dtype=np.int8)), [0])
+
+
+def test_tree_rejects_array_criterion():
+    with pytest.raises(ValueError, match="criterion"):
+        DecisionTreeClassifier(criterion=np.array(["gini"]))
