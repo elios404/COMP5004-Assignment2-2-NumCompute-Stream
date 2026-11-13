@@ -268,3 +268,41 @@ def test_tree_rejects_invalid_buffer_size():
     for buffer_size in (0, -1, True, 1.5):
         with pytest.raises(ValueError, match="buffer_size"):
             DecisionTreeClassifier(buffer_size=buffer_size)
+
+
+def test_partial_fit_rejects_integer_rounding_past_dtype_limit():
+    for dtype in (np.int64, np.uint64):
+        maximum = int(np.iinfo(dtype).max)
+        tree = DecisionTreeClassifier(buffer_size=2).fit([[0]], [7])
+        tree.partial_fit(np.array([[maximum]], dtype=dtype), [0])
+
+        with pytest.raises(ValueError, match="losing integer precision"):
+            tree.partial_fit([[float(maximum + 1)]], [1])
+        np.testing.assert_array_equal(tree.predict([[0]]), [7])
+
+        X = np.array([[maximum - 1], [maximum]], dtype=dtype)
+        tree.partial_fit(X[:1], [1])
+        np.testing.assert_array_equal(tree.predict(X), [1, 0])
+
+
+def test_partial_fit_accepts_exact_integer_values_in_mixed_dtypes():
+    lower = -(2**63)
+    tree = DecisionTreeClassifier(buffer_size=2)
+    tree.partial_fit(np.array([[lower]], dtype=np.int64), [0])
+    tree.partial_fit([[0.0]], [1])
+
+    np.testing.assert_array_equal(tree.predict([[float(lower)], [0.0]]), [0, 1])
+
+
+def test_partial_fit_rejects_mixed_byte_and_unicode_labels_before_buffering():
+    tree = DecisionTreeClassifier(buffer_size=3).fit([[0]], [b"old"])
+    tree.partial_fit([[0]], [b"\xff"])
+
+    with pytest.raises(ValueError, match="cannot mix byte and Unicode labels"):
+        tree.partial_fit([[1]], ["new"])
+    np.testing.assert_array_equal(tree.predict([[0]]), [b"old"])
+
+    tree.partial_fit([[1]], [b"new"])
+    np.testing.assert_array_equal(tree.predict([[0]]), [b"old"])
+    tree.partial_fit([[2]], [b"new"])
+    np.testing.assert_array_equal(tree.predict([[0], [1], [2]]), [b"\xff", b"new", b"new"])

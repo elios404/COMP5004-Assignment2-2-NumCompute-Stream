@@ -206,8 +206,8 @@ class DecisionTreeClassifier:
         current tree for prediction and keep a copy of the new chunk.
 
         The feature count must match the fitted tree or the first pending
-        chunk. Pending chunks must use the same label family (numeric or
-        string) and combine without losing integer precision.
+        chunk. Pending chunks must use compatible labels (numeric, byte
+        strings or Unicode strings) and combine without losing integer precision.
         """
         X, y = self._validate_training_data(X_chunk, y_chunk)
         expected_features = self.n_features_in_
@@ -221,6 +221,8 @@ class DecisionTreeClassifier:
             buffered_labels = self._buffer[0][1]
             if (buffered_labels.dtype.kind in "US") != (y.dtype.kind in "US"):
                 raise ValueError("Buffered chunks must use either numeric labels or string labels.")
+            if y.dtype.kind in "US" and buffered_labels.dtype.kind != y.dtype.kind:
+                raise ValueError("Buffered chunks cannot mix byte and Unicode labels.")
 
         total_rows = self._buffered_rows + X.shape[0]
         if total_rows < self.buffer_size:
@@ -233,7 +235,7 @@ class DecisionTreeClassifier:
             return self.fit(X, y)
 
         features, labels = zip(*self._buffer, (X, y))
-        
+
         return self.fit(self._join_chunks(features), self._join_chunks(labels))
 
     @staticmethod
@@ -243,9 +245,15 @@ class DecisionTreeClassifier:
             # Mixed numeric dtypes can round large integer values during concatenation.
             for chunk in chunks:
                 if chunk.dtype.kind in "iu":
-                    with np.errstate(invalid="ignore", over="ignore"):
-                        restored = chunk.astype(joined.dtype).astype(chunk.dtype)
-                    if not np.array_equal(restored, chunk):
+                    limits = np.iinfo(chunk.dtype)
+                    converted = chunk.astype(joined.dtype)
+                    # The exclusive upper bound is exactly representable as a float.
+                    upper_bound = joined.dtype.type(int(limits.max) + 1)
+                    if (
+                        np.any(converted < joined.dtype.type(limits.min))
+                        or np.any(converted >= upper_bound)
+                        or not np.array_equal(converted.astype(chunk.dtype), chunk)
+                    ):
                         raise ValueError("Chunk dtypes cannot be combined without losing integer precision.")
         return joined
 
