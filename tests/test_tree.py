@@ -177,3 +177,94 @@ def test_tree_keeps_split_boundary_with_mixed_numeric_dtypes():
 def test_tree_rejects_array_criterion():
     with pytest.raises(ValueError, match="criterion"):
         DecisionTreeClassifier(criterion=np.array(["gini"]))
+
+
+def test_partial_fit_retrains_at_and_above_buffer_size():
+    tree = DecisionTreeClassifier(buffer_size=3)
+    assert tree.partial_fit([[0]], [0]) is tree
+    with pytest.raises(RuntimeError, match="not fitted"):
+        tree.predict([[0]])
+
+    tree.partial_fit([[1], [2]], [0, 1])
+    np.testing.assert_array_equal(tree.predict([[0], [2]]), [0, 1])
+
+    tree.partial_fit([[0], [1]], [2, 2])
+    np.testing.assert_array_equal(tree.predict([[0], [2]]), [0, 1])
+    np.testing.assert_array_equal(tree.classes_, [0, 1])
+
+    tree.partial_fit([[2], [3]], [2, 3])
+    np.testing.assert_array_equal(tree.classes_, [2, 3])
+    np.testing.assert_array_equal(tree.predict([[0], [2], [3]]), [2, 2, 3])
+
+    tree.partial_fit([[3]], [4])
+    np.testing.assert_array_equal(tree.predict([[3]]), [3])
+
+
+def test_partial_fit_copies_pending_features_and_labels():
+    tree = DecisionTreeClassifier(buffer_size=2)
+    X = np.array([[0]])
+    y = np.array([0])
+    tree.partial_fit(X, y)
+    X[0, 0] = 10
+    y[0] = 1
+
+    tree.partial_fit([[10]], [1])
+    np.testing.assert_array_equal(tree.predict([[0], [10]]), [0, 1])
+
+
+def test_partial_fit_rejects_invalid_chunks_without_changing_pending_data():
+    tree = DecisionTreeClassifier(buffer_size=2)
+    tree.partial_fit([[0]], [0])
+
+    with pytest.raises(ValueError, match="Expected 1 features, got 2"):
+        tree.partial_fit([[1, 2]], [1])
+    with pytest.raises(ValueError, match="one label per sample"):
+        tree.partial_fit(np.empty((0, 1)), [])
+    with pytest.raises(ValueError, match="one label per sample"):
+        tree.partial_fit([[1]], [[1]])
+    with pytest.raises(ValueError, match="finite feature values"):
+        tree.partial_fit([[np.nan]], [1])
+    with pytest.raises(ValueError, match="numeric labels or string labels"):
+        tree.partial_fit([[1]], ["one"])
+    with pytest.raises(RuntimeError, match="not fitted"):
+        tree.predict([[0]])
+
+    tree.partial_fit([[1]], [1])
+    with pytest.raises(ValueError, match="Expected 1 features, got 2"):
+        tree.partial_fit([[1, 2]], [1])
+    np.testing.assert_array_equal(tree.predict([[0], [1]]), [0, 1])
+
+
+def test_fit_clears_pending_chunks_only_after_success():
+    tree = DecisionTreeClassifier(buffer_size=2)
+    tree.partial_fit([[0]], [0])
+    with pytest.raises(ValueError, match="one label per sample"):
+        tree.fit([[1]], [])
+    tree.partial_fit([[1]], [1])
+    np.testing.assert_array_equal(tree.predict([[0], [1]]), [0, 1])
+
+    tree.partial_fit([[2]], [2])
+    tree.fit([[0, 1]], [7])
+    tree.partial_fit([[1, 2]], [8])
+    np.testing.assert_array_equal(tree.predict([[1, 2]]), [7])
+    tree.partial_fit([[2, 3]], [8])
+    np.testing.assert_array_equal(tree.predict([[1, 2]]), [8])
+
+
+def test_partial_fit_keeps_model_and_buffer_when_retraining_fails():
+    boundary = 2**53
+    tree = DecisionTreeClassifier(buffer_size=2).fit([[0]], [7])
+    tree.partial_fit([[boundary + 1]], [0])
+
+    with pytest.raises(ValueError, match="losing integer precision"):
+        tree.partial_fit([[float(boundary)]], [1])
+    np.testing.assert_array_equal(tree.predict([[boundary]]), [7])
+
+    tree.partial_fit([[boundary]], [1])
+    np.testing.assert_array_equal(tree.predict([[boundary], [boundary + 1]]), [1, 0])
+
+
+def test_tree_rejects_invalid_buffer_size():
+    for buffer_size in (0, -1, True, 1.5):
+        with pytest.raises(ValueError, match="buffer_size"):
+            DecisionTreeClassifier(buffer_size=buffer_size)

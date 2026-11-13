@@ -104,13 +104,15 @@ class _Node:
 
 
 class DecisionTreeClassifier:
-    """A batch classification tree using Gini impurity or entropy.
+    """A classification tree with batch fitting and buffered retraining.
 
     The root has depth zero. max_depth limits the depth of the leaves, and
     min_samples_split is the minimum number of samples needed to try a split.
     max_features is the number of columns sampled without replacement per node.
     Use None to search every column. An integer random_state makes sampling
     reproducible across calls to fit.
+    buffer_size is the minimum number of rows needed to retrain from the
+    pending chunks. It defaults to 500.
 
     Leaves predict the most frequent class. Ties favour the first label in
     sorted order. Features must be finite real numbers.
@@ -119,6 +121,7 @@ class DecisionTreeClassifier:
     def __init__(
         self, max_depth: int = 5, min_samples_split: int = 2, criterion: str = "gini",
         *, max_features: int | None = None, random_state: int | None = None,
+        buffer_size: int = 500,
     ):
 
         if isinstance(max_depth, bool) or not isinstance(max_depth, Integral) or max_depth < 0:
@@ -139,15 +142,20 @@ class DecisionTreeClassifier:
             isinstance(random_state, bool) or not isinstance(random_state, Integral) or random_state < 0
         ):
             raise ValueError("random_state must be None or a non-negative integer.")
+        if isinstance(buffer_size, bool) or not isinstance(buffer_size, Integral) or buffer_size < 1:
+            raise ValueError("buffer_size must be a positive integer.")
 
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.criterion = criterion
         self.max_features = max_features
         self.random_state = random_state
+        self.buffer_size = int(buffer_size)
         self.root_: _Node | None = None
         self.classes_: np.ndarray | None = None
         self.n_features_in_: int | None = None
+        self._buffer: list[tuple[np.ndarray, np.ndarray]] = []
+        self._buffered_rows = 0
 
     @staticmethod
     def _validate_features(X: np.ndarray) -> np.ndarray:
@@ -163,8 +171,7 @@ class DecisionTreeClassifier:
         
         return X
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> DecisionTreeClassifier:
-        """Train from scratch on features of shape (N, D) and labels of shape (N,)."""
+    def _validate_training_data(self, X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         X = self._validate_features(X)
         y = np.asarray(y)
         if self.max_features is not None and self.max_features > X.shape[1]:
@@ -174,14 +181,73 @@ class DecisionTreeClassifier:
             raise ValueError("y must be a non-empty 1D array with one label per sample.")
         if y.dtype.kind not in "biufUS" or (y.dtype.kind == "f" and not np.isfinite(y).all()):
             raise ValueError("y must contain finite numeric labels or strings.")
+        
+        return X, y
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> DecisionTreeClassifier:
+        """Train from scratch on X (N, D) and y (N,), then clear pending chunks."""
+        X, y = self._validate_training_data(X, y)
 
         classes, encoded = np.unique(y, return_inverse=True)
         rng = np.random.default_rng(self.random_state)
         self.root_ = self._build(X, encoded, depth=0, rng=rng)
         self.classes_ = classes
         self.n_features_in_ = X.shape[1]
+        self._buffer.clear()
+        self._buffered_rows = 0
 
         return self
+
+    def partial_fit(self, X_chunk: np.ndarray, y_chunk: np.ndarray) -> DecisionTreeClassifier:
+        """Add a non-empty chunk of features (N, D) and labels (N,).
+
+        Once at least buffer_size rows are available, replace the tree using
+        all pending rows, including the whole new chunk. Otherwise, retain the
+        current tree for prediction and keep a copy of the new chunk.
+
+        The feature count must match the fitted tree or the first pending
+        chunk. Pending chunks must use the same label family (numeric or
+        string) and combine without losing integer precision.
+        """
+        X, y = self._validate_training_data(X_chunk, y_chunk)
+        expected_features = self.n_features_in_
+
+        if expected_features is None and self._buffer:
+            expected_features = self._buffer[0][0].shape[1]
+        if expected_features is not None and X.shape[1] != expected_features:
+            raise ValueError(f"Expected {expected_features} features, got {X.shape[1]}.")
+
+        if self._buffer:
+            buffered_labels = self._buffer[0][1]
+            if (buffered_labels.dtype.kind in "US") != (y.dtype.kind in "US"):
+                raise ValueError("Buffered chunks must use either numeric labels or string labels.")
+
+        total_rows = self._buffered_rows + X.shape[0]
+        if total_rows < self.buffer_size:
+            self._buffer.append((X.copy(), y.copy()))
+            self._buffered_rows = total_rows
+
+            return self
+
+        if not self._buffer:
+            return self.fit(X, y)
+
+        features, labels = zip(*self._buffer, (X, y))
+        
+        return self.fit(self._join_chunks(features), self._join_chunks(labels))
+
+    @staticmethod
+    def _join_chunks(chunks: tuple[np.ndarray, ...]) -> np.ndarray:
+        joined = np.concatenate(chunks, axis=0)
+        if joined.dtype.kind == "f":
+            # Mixed numeric dtypes can round large integer values during concatenation.
+            for chunk in chunks:
+                if chunk.dtype.kind in "iu":
+                    with np.errstate(invalid="ignore", over="ignore"):
+                        restored = chunk.astype(joined.dtype).astype(chunk.dtype)
+                    if not np.array_equal(restored, chunk):
+                        raise ValueError("Chunk dtypes cannot be combined without losing integer precision.")
+        return joined
 
     def _build(self, X: np.ndarray, y: np.ndarray, depth: int, rng: np.random.Generator) -> _Node:
         classes, counts = np.unique(y, return_counts=True)
