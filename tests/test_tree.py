@@ -113,3 +113,38 @@ def test_tree_rejects_invalid_configuration():
         DecisionTreeClassifier(min_samples_split=1)
     with pytest.raises(ValueError, match="criterion"):
         DecisionTreeClassifier(criterion="unknown")
+
+
+def test_best_split_searches_only_the_requested_features():
+    X = [[0, 0], [0, 1], [1, 2], [1, 2]]
+    y = [0, 0, 1, 1]
+
+    assert _best_split(X, y)[0] == 0
+    assert _best_split(X, y, features=np.array([1])) == (1, 1.5, 0.5)
+
+
+def test_tree_samples_features_reproducibly_at_each_node():
+    values = np.arange(6)
+    X = np.tile(values[:, None], (1, 4))
+    y = [0, 0, 1, 1, 2, 2]
+    tree = DecisionTreeClassifier(max_features=1, random_state=42).fit(X, y)
+    rng = np.random.default_rng(42)
+    root_feature = rng.choice(4, size=1, replace=False)[0]
+    child_feature = rng.choice(4, size=1, replace=False)[0]
+
+    assert tree.root_.feature == root_feature
+    assert tree.root_.right.feature == child_feature
+    np.testing.assert_array_equal(tree.predict(X), y)
+    tree.fit(X, y)
+    assert tree.root_.feature == root_feature
+    assert tree.root_.right.feature == child_feature
+
+
+def test_tree_validates_feature_sampling_settings():
+    for max_features in (0, True, 1.5):
+        with pytest.raises(ValueError, match="max_features"):
+            DecisionTreeClassifier(max_features=max_features)
+    with pytest.raises(ValueError, match="number of input features"):
+        DecisionTreeClassifier(max_features=2).fit([[0], [1]], [0, 1])
+    with pytest.raises(ValueError, match="random_state"):
+        DecisionTreeClassifier(random_state=-1)
