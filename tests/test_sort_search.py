@@ -143,12 +143,17 @@ class TestTopK:
         _, idx = topk([5, 5, 5], k=3)
         np.testing.assert_array_equal(idx, [0, 1, 2])
 
-    @pytest.mark.parametrize(("largest", "expected"), [(True, [3, 0, 2]), (False, [1, 0, 2])])
-    def test_ties_at_selection_boundary_prefer_earlier_indices(self, largest, expected):
+    def test_largest_ties_at_boundary_prefer_earlier_indices(self):
         values = np.array([5, 1, 5, 9, 5])
-        vals, idx = topk(values, k=3, largest=largest)
-        np.testing.assert_array_equal(idx, expected)
-        np.testing.assert_array_equal(vals, values[expected])
+        vals, idx = topk(values, k=3, largest=True)
+        np.testing.assert_array_equal(idx, [3, 0, 2])
+        np.testing.assert_array_equal(vals, [9, 5, 5])
+
+    def test_smallest_ties_at_boundary_prefer_earlier_indices(self):
+        values = np.array([5, 1, 5, 9, 5])
+        vals, idx = topk(values, k=3, largest=False)
+        np.testing.assert_array_equal(idx, [1, 0, 2])
+        np.testing.assert_array_equal(vals, [1, 5, 5])
 
     def test_nan_ties_at_selection_boundary_prefer_earlier_indices(self):
         vals, idx = topk([np.nan, 3.0, np.nan, np.nan], k=2)

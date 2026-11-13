@@ -151,14 +151,15 @@ def test_grad_invalid_method():
         grad(f, np.array([2.0]), method="invalid")
 
 
-@pytest.mark.parametrize("differentiate", [grad, jacobian])
-@pytest.mark.parametrize("h", [0.0, -1e-5, np.nan, np.inf, -np.inf])
-def test_finite_difference_rejects_invalid_step_before_evaluation(differentiate, h):
+def test_finite_difference_rejects_invalid_step_before_evaluation():
     def unexpected_evaluation(x):
         raise AssertionError("The input function was called with an invalid step size")
 
-    with pytest.raises(ValueError, match="finite, positive step size"):
-        differentiate(unexpected_evaluation, np.array([2.0]), h=h)
+    x = np.array([2.0])
+    for differentiate in (grad, jacobian):
+        for h in (0.0, -1e-5, np.nan, np.inf, -np.inf):
+            with pytest.raises(ValueError, match="finite, positive step size"):
+                differentiate(unexpected_evaluation, x, h=h)
 
 
 # =========================
