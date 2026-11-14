@@ -6,6 +6,8 @@ import numpy as np
 
 from numcompute.pipeline import BaseTransformer
 
+from ._moments import _chunk_mean, _merge_means, updated_moments
+
 
 def _check_shape(X: np.ndarray, n_features: int | None, training: bool) -> None:
     if X.ndim != 2 or X.shape[1] == 0:
@@ -28,23 +30,6 @@ def _numeric_input(X: np.ndarray, n_features: int | None, training: bool) -> np.
         raise ValueError("Features must be finite or NaN.")
     
     return X
-
-
-def _chunk_mean(X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    observed = ~np.isnan(X)
-    count = observed.sum(axis=0)
-    mean = (np.where(observed, X, 0.0) / np.maximum(count, 1)).sum(axis=0)
-    return count, mean
-
-
-def _merge_means(
-    count: np.ndarray, mean: np.ndarray, chunk_count: np.ndarray, chunk_mean: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    total = count + chunk_count
-    chunk_weight = chunk_count / np.maximum(total, 1)
-    merged = mean * (count / np.maximum(total, 1)) + chunk_mean * chunk_weight
-
-    return total, merged
 
 
 class StandardScaler(BaseTransformer):
@@ -75,29 +60,12 @@ class StandardScaler(BaseTransformer):
 
     def _update(self, X: np.ndarray, reset: bool) -> StandardScaler:
         X = _numeric_input(X, None if reset else self.n_features_in_, training=True)
-        with np.errstate(over="ignore", invalid="ignore"):
-            count, mean = _chunk_mean(X)
-            variance = None
+        previous = None
+        if not reset and self.n_samples_seen_ is not None:
+            previous = (self.n_samples_seen_, self._mean, self.var_)
 
-            if self.with_std:
-                centred = np.where(np.isnan(X), 0.0, X - mean)
-                scaled = centred / np.sqrt(np.maximum(count, 1))
-                variance = np.square(scaled).sum(axis=0)
+        count, mean, variance = updated_moments(X, previous, self.with_std)
 
-            if not reset and self.n_samples_seen_ is not None:
-                old_count = self.n_samples_seen_
-                total, merged_mean = _merge_means(old_count, self._mean, count, mean)
-                if self.with_std:
-                    old_weight = old_count / np.maximum(total, 1)
-                    new_weight = count / np.maximum(total, 1)
-                    weight = np.sqrt(old_weight * new_weight)
-                    distance = mean * weight - self._mean * weight
-                    variance = old_weight * self.var_ + new_weight * variance + distance ** 2
-                count, mean = total, merged_mean
-
-        if not np.isfinite(mean).all() or (variance is not None and not np.isfinite(variance).all()):
-            raise ValueError("StandardScaler statistics exceed the floating-point range.")
-        
         self.n_features_in_ = X.shape[1]
         self.n_samples_seen_ = count
         self._mean = mean
