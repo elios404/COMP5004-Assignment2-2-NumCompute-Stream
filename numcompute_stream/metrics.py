@@ -154,6 +154,12 @@ class StreamingMetrics:
 
         return self._result(self._counts, auc)
 
+    @property
+    def accuracy(self) -> float:
+        """Return cumulative accuracy without calculating ROC AUC."""
+        total = self._counts.sum()
+        return float(self._counts.trace() / total) if total else float("nan")
+
     def rolling_result(self) -> dict:
         """Return metrics over the most recent window_size observations."""
         if self._window_size is None:

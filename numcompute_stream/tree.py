@@ -101,6 +101,7 @@ class _Node:
     threshold: int | float | np.floating = 0.0
     left: _Node | None = None
     right: _Node | None = None
+    distribution: tuple[np.ndarray, np.ndarray] | None = None
 
 
 class DecisionTreeClassifier:
@@ -262,6 +263,7 @@ class DecisionTreeClassifier:
         node = _Node(class_index=int(classes[np.argmax(counts)]))
 
         if classes.size == 1 or depth >= self.max_depth or y.size < self.min_samples_split:
+            node.distribution = (classes, counts / y.size)
             return node
 
         features = None
@@ -269,6 +271,7 @@ class DecisionTreeClassifier:
             features = np.sort(rng.choice(X.shape[1], size=self.max_features, replace=False))
         split = _best_split(X, y, self.criterion, features)
         if split is None:
+            node.distribution = (classes, counts / y.size)
             return node
 
         node.feature, node.threshold, _ = split
@@ -280,6 +283,22 @@ class DecisionTreeClassifier:
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return one class label per row of a feature array of shape (N, D)."""
+        X = self._prediction_input(X)
+        predictions = np.empty(X.shape[0], dtype=np.intp)
+        for node, rows in self._walk_leaves(X):
+            predictions[rows] = node.class_index
+        return self.classes_[predictions]
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Return empirical leaf probabilities in classes_ order, shape (N, C)."""
+        X = self._prediction_input(X)
+        probabilities = np.zeros((X.shape[0], self.classes_.size))
+        for node, rows in self._walk_leaves(X):
+            indices, proportions = node.distribution
+            probabilities[rows[:, None], indices] = proportions
+        return probabilities
+
+    def _prediction_input(self, X: np.ndarray) -> np.ndarray:
         if self.root_ is None or self.classes_ is None:
             raise RuntimeError("DecisionTreeClassifier is not fitted yet.")
         
@@ -287,7 +306,9 @@ class DecisionTreeClassifier:
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"Expected {self.n_features_in_} features, got {X.shape[1]}.")
 
-        predictions = np.empty(X.shape[0], dtype=np.intp)
+        return X
+
+    def _walk_leaves(self, X: np.ndarray):
         pending = [(self.root_, np.arange(X.shape[0]))]
         
         while pending:
@@ -295,7 +316,7 @@ class DecisionTreeClassifier:
             if rows.size == 0:
                 continue
             if node.feature is None:
-                predictions[rows] = node.class_index
+                yield node, rows
             else:
                 values = X[rows, node.feature]
                 threshold = node.threshold
@@ -316,5 +337,3 @@ class DecisionTreeClassifier:
                     left = values.astype(comparison_dtype, copy=False) <= threshold
                 pending.append((node.left, rows[left]))
                 pending.append((node.right, rows[~left]))
-
-        return self.classes_[predictions]

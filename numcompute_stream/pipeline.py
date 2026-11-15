@@ -82,6 +82,24 @@ class Pipeline(BatchPipeline):
         """Predict using the preprocessing state paired with the fitted model."""
         return super().predict(self._input(X))
 
+    @property
+    def is_fitted(self) -> bool:
+        """Whether a complete set of fitted steps is available."""
+        return self._is_fitted
+
+    def predict_proba(self, X):
+        """Apply the fitted preprocessing and return the final model's probabilities."""
+        if not self.is_fitted:
+            raise RuntimeError("Pipeline is not fitted yet.")
+        name, model = self.steps[-1]
+        if not callable(getattr(model, "predict_proba", None)):
+            raise AttributeError(f"Final step '{name}' does not implement predict_proba.")
+
+        X = self._input(X)
+        for _, step in self.steps[:-1]:
+            X = step.transform(X)
+        return model.predict_proba(X)
+
     def transform(self, X):
         """Apply the fitted steps of a transformer-only pipeline."""
         return super().transform(self._input(X))
