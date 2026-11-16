@@ -9,7 +9,8 @@ import numpy as np
 
 
 def _impurity_from_counts(counts: np.ndarray, criterion: str) -> np.ndarray:
-    probabilities = counts / counts.sum(axis=-1, keepdims=True)
+    # counts can have many groups inside
+    probabilities = counts / counts.sum(axis=-1, keepdims=True) # divide into sum of row
     if criterion == "gini":
         return 1.0 - np.sum(probabilities ** 2, axis=-1)
     if criterion == "entropy":
@@ -17,12 +18,6 @@ def _impurity_from_counts(counts: np.ndarray, criterion: str) -> np.ndarray:
         np.log2(probabilities, out=log_probabilities, where=probabilities > 0)
         return -np.sum(probabilities * log_probabilities, axis=-1)
     raise ValueError("criterion must be 'gini' or 'entropy'.")
-
-
-def _impurity(y: np.ndarray, criterion: str) -> float:
-    """Compute Gini impurity or entropy from a non-empty vector of labels."""
-    _, counts = np.unique(y, return_counts=True)
-    return float(_impurity_from_counts(counts, criterion))
 
 
 def _best_split(
@@ -47,24 +42,25 @@ def _best_split(
     if not np.isfinite(X).all():
         raise ValueError("X must contain only finite feature values.")
 
-    _, encoded, counts = np.unique(y, return_inverse=True, return_counts=True)
+    _, encoded, counts = np.unique(y, return_inverse=True, return_counts=True) # transfrom into index, counts
     parent_impurity = _impurity_from_counts(counts, criterion)
     gain_tolerance = 8 * np.finfo(float).eps
     indicators = encoded[:, None] == np.arange(counts.size)
     candidates = []
     best_gain = gain_tolerance
 
-    for feature_index in range(X.shape[1]) if features is None else features:
+    feature_indices = range(X.shape[1]) if features is None else features
+    for feature_index in feature_indices:
         column = X[:, feature_index]
-        order = np.argsort(column, kind="stable")
+        order = np.argsort(column, kind="stable") # use to sort answer 'y' also
         values = column[order]
-        boundaries = np.flatnonzero(values[:-1] < values[1:])
+        boundaries = np.flatnonzero(values[:-1] < values[1:]) # check the indexs where value changes
         if boundaries.size == 0:
             continue
 
-        left_counts = np.cumsum(indicators[order], axis=0)[boundaries]
+        left_counts = np.cumsum(indicators[order], axis=0)[boundaries] # find left groups counts in cumsum list with boundaries filter
         right_counts = counts - left_counts
-        n_left = boundaries + 1
+        n_left = boundaries + 1 
         gains = parent_impurity - (
             n_left * _impurity_from_counts(left_counts, criterion)
             + (y.size - n_left) * _impurity_from_counts(right_counts, criterion)
@@ -72,18 +68,26 @@ def _best_split(
         best_gain = max(best_gain, gains.max())
         tied = (gains > gain_tolerance) & (gains >= best_gain - gain_tolerance)
         if tied.any():
-            candidates.append((feature_index, values[boundaries[tied]],
-                               values[boundaries[tied] + 1], gains[tied]))
+            kept_boundaries = boundaries[tied]
+            candidates.append((
+                feature_index,
+                values[kept_boundaries],
+                values[kept_boundaries + 1],
+                gains[tied],
+            ))
 
     for feature_index, lower_values, upper_values, gains in candidates:
         tied = np.flatnonzero(gains >= best_gain - gain_tolerance)
         if tied.size:
             index = tied[0]
             lower, upper = lower_values[index], upper_values[index]
-            if X.dtype.kind in "iu" and max(abs(int(lower)), abs(int(upper))) >= 2**53:
-                return int(feature_index), int(lower), float(gains[index])
+
             if X.dtype.kind in "biu":
-                lower, upper = float(lower), float(upper)
+                lower_int, upper_int = int(lower), int(upper)
+                lower, upper = float(lower_int), float(upper_int)
+                if lower != lower_int or upper != upper_int:
+                    return int(feature_index), lower_int, float(gains[index])
+
             threshold = lower / 2 + upper / 2
             if not lower <= threshold < upper:
                 threshold = lower
@@ -127,11 +131,7 @@ class DecisionTreeClassifier:
 
         if isinstance(max_depth, bool) or not isinstance(max_depth, Integral) or max_depth < 0:
             raise ValueError("max_depth must be a non-negative integer.")
-        if (
-            isinstance(min_samples_split, bool)
-            or not isinstance(min_samples_split, Integral)
-            or min_samples_split < 2
-        ):
+        if (not isinstance(min_samples_split, Integral) or min_samples_split < 2):
             raise ValueError("min_samples_split must be an integer of at least 2.")
         if not isinstance(criterion, str) or criterion not in ("gini", "entropy"):
             raise ValueError("criterion must be 'gini' or 'entropy'.")
@@ -152,11 +152,11 @@ class DecisionTreeClassifier:
         self.max_features = max_features
         self.random_state = random_state
         self.buffer_size = int(buffer_size)
-        self.root_: _Node | None = None
-        self.classes_: np.ndarray | None = None
-        self.n_features_in_: int | None = None
-        self._buffer: list[tuple[np.ndarray, np.ndarray]] = []
-        self._buffered_rows = 0
+        self.root_: _Node | None = None # root node
+        self.classes_: np.ndarray | None = None # actual label values
+        self.n_features_in_: int | None = None # how many features we use for fitting
+        self._buffer: list[tuple[np.ndarray, np.ndarray]] = [] # buffer chunk not used for training yet
+        self._buffered_rows = 0 # how many rows in _buffer
 
     @staticmethod
     def _validate_features(X: np.ndarray) -> np.ndarray:
@@ -166,7 +166,6 @@ class DecisionTreeClassifier:
             raise ValueError("X must be a 2D array with at least one feature.")
         if X.dtype.kind not in "biuf":
             raise ValueError("X must contain real numeric feature values.")
-        
         if not np.isfinite(X).all():
             raise ValueError("X must contain only finite feature values.")
         
@@ -175,9 +174,9 @@ class DecisionTreeClassifier:
     def _validate_training_data(self, X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         X = self._validate_features(X)
         y = np.asarray(y)
+
         if self.max_features is not None and self.max_features > X.shape[1]:
             raise ValueError(f"max_features cannot exceed the number of input features ({X.shape[1]}).")
-
         if y.ndim != 1 or y.size == 0 or y.size != X.shape[0]:
             raise ValueError("y must be a non-empty 1D array with one label per sample.")
         if y.dtype.kind not in "biufUS" or (y.dtype.kind == "f" and not np.isfinite(y).all()):
@@ -211,8 +210,8 @@ class DecisionTreeClassifier:
         strings or Unicode strings) and combine without losing integer precision.
         """
         X, y = self._validate_training_data(X_chunk, y_chunk)
+        
         expected_features = self.n_features_in_
-
         if expected_features is None and self._buffer:
             expected_features = self._buffer[0][0].shape[1]
         if expected_features is not None and X.shape[1] != expected_features:
@@ -229,14 +228,9 @@ class DecisionTreeClassifier:
         if total_rows < self.buffer_size:
             self._buffer.append((X.copy(), y.copy()))
             self._buffered_rows = total_rows
-
             return self
 
-        if not self._buffer:
-            return self.fit(X, y)
-
         features, labels = zip(*self._buffer, (X, y))
-
         return self.fit(self._join_chunks(features), self._join_chunks(labels))
 
     @staticmethod
@@ -259,9 +253,10 @@ class DecisionTreeClassifier:
         return joined
 
     def _build(self, X: np.ndarray, y: np.ndarray, depth: int, rng: np.random.Generator) -> _Node:
-        classes, counts = np.unique(y, return_counts=True)
-        node = _Node(class_index=int(classes[np.argmax(counts)]))
+        classes, counts = np.unique(y, return_counts=True) # check the answer label and its counts
+        node = _Node(class_index=int(classes[np.argmax(counts)])) # for the most possible answer
 
+        # if the y classes are also same or reach the max_depth or min_sample_split
         if classes.size == 1 or depth >= self.max_depth or y.size < self.min_samples_split:
             node.distribution = (classes, counts / y.size)
             return node
@@ -275,7 +270,7 @@ class DecisionTreeClassifier:
             return node
 
         node.feature, node.threshold, _ = split
-        left = X[:, node.feature] <= node.threshold
+        left = X[:, node.feature] <= node.threshold # divide into left and right
         node.left = self._build(X[left], y[left], depth + 1, rng)
         node.right = self._build(X[~left], y[~left], depth + 1, rng)
 
@@ -321,7 +316,6 @@ class DecisionTreeClassifier:
                 values = X[rows, node.feature]
                 threshold = node.threshold
                 if isinstance(threshold, int) and values.dtype.kind == "f":
-                    # A rounded-up threshold would include values on the right.
                     values = values.astype(np.result_type(values.dtype, np.float64), copy=False)
                     rounded = values.dtype.type(threshold)
                     left = values < rounded if int(rounded) > threshold else values <= rounded

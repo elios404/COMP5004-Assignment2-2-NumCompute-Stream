@@ -3,17 +3,18 @@
 import numpy as np
 import pytest
 
-from numcompute_stream.tree import DecisionTreeClassifier, _best_split, _impurity
+from numcompute_stream.tree import DecisionTreeClassifier, _best_split, _impurity_from_counts
 
 
-def test_impurity_for_pure_and_balanced_labels():
-    pure = np.array([1, 1, 1, 1])
-    balanced = np.array([0, 0, 1, 1])
+def test_impurity_from_counts_for_pure_and_balanced_groups():
+    counts = np.array([[4, 0], [2, 2]])
 
-    assert _impurity(pure, "gini") == 0.0
-    assert _impurity(pure, "entropy") == 0.0
-    assert _impurity(balanced, "gini") == 0.5
-    assert _impurity(balanced, "entropy") == 1.0
+    np.testing.assert_array_equal(
+        _impurity_from_counts(counts, "gini"), [0.0, 0.5]
+    )
+    np.testing.assert_array_equal(
+        _impurity_from_counts(counts, "entropy"), [0.0, 1.0]
+    )
 
 
 def test_best_split_separates_the_two_classes():
