@@ -1,11 +1,8 @@
 """Cumulative and rolling classification metrics."""
 
 from __future__ import annotations
-
 from numbers import Integral
-
 import numpy as np
-
 from numcompute.metrics import roc_curve
 
 

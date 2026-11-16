@@ -1,11 +1,8 @@
 """Preprocessing transformers with chunk-wise fitting."""
 
 from __future__ import annotations
-
 import numpy as np
-
 from numcompute.pipeline import BaseTransformer
-
 from ._moments import _chunk_mean, _merge_means, updated_moments
 
 
@@ -24,6 +21,7 @@ def _numeric_input(X: np.ndarray, n_features: int | None, training: bool) -> np.
 
     if X.dtype.kind not in "biuf":
         raise ValueError("Expected real numeric features.")
+    
     with np.errstate(over="ignore"):
         X = X.astype(np.float64, copy=False)
     if np.isinf(X).any():
@@ -48,7 +46,6 @@ class StandardScaler(BaseTransformer):
         self.var_ = None
         self.scale_ = None
         self.n_samples_seen_ = None
-        self._mean = None
 
     def fit(self, X: np.ndarray, y=None) -> StandardScaler:
         """Replace the fitted statistics using X."""
@@ -62,16 +59,18 @@ class StandardScaler(BaseTransformer):
         X = _numeric_input(X, None if reset else self.n_features_in_, training=True)
         previous = None
         if not reset and self.n_samples_seen_ is not None:
-            previous = (self.n_samples_seen_, self._mean, self.var_)
+            previous = (self.n_samples_seen_, self.mean_, self.var_)
 
         count, mean, variance = updated_moments(X, previous, self.with_std)
 
         self.n_features_in_ = X.shape[1]
         self.n_samples_seen_ = count
-        self._mean = mean
-        self.mean_ = mean if self.with_mean else None
+        self.mean_ = mean
         self.var_ = variance
-        self.scale_ = None if variance is None else np.where(variance == 0, 1.0, np.sqrt(variance))
+        if variance is None:
+            self.scale_ = None
+        else:
+            self.scale_ = np.where(variance == 0, 1.0, np.sqrt(variance))
 
         return self
 

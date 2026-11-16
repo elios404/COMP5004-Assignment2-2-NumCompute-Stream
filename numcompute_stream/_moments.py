@@ -7,6 +7,7 @@ def _chunk_mean(X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     observed = ~np.isnan(X)
     count = observed.sum(axis=0)
     mean = (np.where(observed, X, 0.0) / np.maximum(count, 1)).sum(axis=0)
+
     return count, mean
 
 
@@ -14,8 +15,7 @@ def _merge_means(
     count: np.ndarray, mean: np.ndarray, chunk_count: np.ndarray, chunk_mean: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     total = count + chunk_count
-    chunk_weight = chunk_count / np.maximum(total, 1)
-    merged = mean * (count / np.maximum(total, 1)) + chunk_mean * chunk_weight
+    merged = mean * (count / np.maximum(total, 1)) + chunk_mean * (chunk_count / np.maximum(total, 1))
 
     return total, merged
 

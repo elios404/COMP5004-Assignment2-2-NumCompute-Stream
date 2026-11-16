@@ -1,9 +1,7 @@
 """Column-wise statistics for streams of numeric data."""
 
 from __future__ import annotations
-
 import numpy as np
-
 from ._moments import updated_moments
 from .preprocessing import _numeric_input
 

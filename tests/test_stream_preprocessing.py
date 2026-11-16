@@ -22,7 +22,7 @@ def test_standard_scaler_keeps_statistics_for_an_all_missing_chunk_column():
     np.testing.assert_allclose(scaler.transform([[3, 12]]), [[3, 12]])
 
     scaler.partial_fit([[np.nan, 12], [np.nan, 16]])
-    assert scaler.mean_ is None
+    np.testing.assert_allclose(scaler.mean_, [3, 14])
     np.testing.assert_allclose(scaler.var_, [1, 4])
     np.testing.assert_allclose(scaler.transform([[3, 12]]), [[3, 6]])
 

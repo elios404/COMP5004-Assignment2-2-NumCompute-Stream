@@ -35,7 +35,7 @@ class Pipeline(BatchPipeline):
             raise TypeError(f"Final step '{name}' must implement fit and either predict or transform.")
 
         self._training_steps = self.steps
-        self._pending: list[tuple[np.ndarray, np.ndarray]] = []
+        self._pending: list[tuple[np.ndarray, np.ndarray]] = [] # buffer
         self._pending_rows = 0
         self.n_features_in_: int | None = None
 
@@ -61,6 +61,8 @@ class Pipeline(BatchPipeline):
     def fit(self, X, y=None):
         """Train from scratch and clear pending chunks after a successful fit."""
         X = self._input(X, training=True, reset=True)
+
+        # to keep the original pipeline in case of failure
         candidate = copy(self)
         candidate.steps = deepcopy(self.steps)
         super(Pipeline, candidate).fit(X, y)
@@ -71,6 +73,7 @@ class Pipeline(BatchPipeline):
     def fit_transform(self, X, y=None):
         """Fit a transformer-only pipeline and return its transformed data."""
         X = self._input(X, training=True, reset=True)
+
         candidate = copy(self)
         candidate.steps = deepcopy(self.steps)
         result = super(Pipeline, candidate).fit_transform(X, y)
@@ -91,6 +94,7 @@ class Pipeline(BatchPipeline):
         """Apply the fitted preprocessing and return the final model's probabilities."""
         if not self.is_fitted:
             raise RuntimeError("Pipeline is not fitted yet.")
+        
         name, model = self.steps[-1]
         if not callable(getattr(model, "predict_proba", None)):
             raise AttributeError(f"Final step '{name}' does not implement predict_proba.")
@@ -115,7 +119,6 @@ class Pipeline(BatchPipeline):
         n_features = X.shape[1]
         name, model = self._training_steps[-1]
         buffered = callable(getattr(model, "predict", None)) and hasattr(model, "buffer_size")
-        
         y = None if y_chunk is None else np.asarray(y_chunk)
         if y is not None and (y.ndim == 0 or y.shape[0] != X.shape[0]):
             raise ValueError("y must contain one entry per sample.")
