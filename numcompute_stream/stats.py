@@ -83,6 +83,9 @@ class StreamingStats:
         if q.dtype.kind not in "iuf" or not np.isfinite(q).all() or np.any((q < 0) | (q > 1)):
             raise ValueError("q must contain finite numbers in [0, 1].")
 
+        if q.size == 0:
+            return np.empty(q.shape + (self._moments[0].size,))
+
         history = np.concatenate(self._chunks, axis=0)
         observed = self._moments[0] > 0
         result = np.full(q.shape + (history.shape[1],), np.nan)

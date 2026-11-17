@@ -48,6 +48,8 @@ def test_quantiles_use_exact_history_and_keep_input_shape():
     np.testing.assert_allclose(stats.quantiles(q), np.nanquantile(X, q, axis=0))
     assert stats.quantiles(0.5).shape == (2,)
     assert stats.quantiles([]).shape == (0, 2)
+    assert stats.quantiles(np.empty((2, 0))).shape == (2, 0, 2)
+    assert stats.quantiles(np.empty((0, 2))).shape == (0, 2, 2)
 
 
 def test_histogram_accumulates_counts_without_history():
