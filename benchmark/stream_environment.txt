@@ -1,0 +1,11 @@
+Platform: macOS-26.7.1-arm64-arm-64bit
+Python: 3.11.15
+NumPy: 2.4.6
+Seed: 42
+Rows: 1280
+Features: 6
+Chunk rows: 40
+Buffer rows: (80, 160, 320)
+Tree max depth: 4
+Timing repetitions: 5
+Split calls per repetition per window: 10

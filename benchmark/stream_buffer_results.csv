@@ -1,0 +1,4 @@
+buffer_rows,refits_per_run,first_scored_chunk,shared_scored_rows,shared_accuracy,median_refit_update_ms
+80,16,3,960,0.872917,10.530271
+160,8,5,960,0.875,14.934229
+320,4,9,960,0.816667,18.510812
