@@ -71,7 +71,7 @@ class StreamTrainer:
         actual = np.asarray(y)
         evaluation = None
         if self.pipeline.is_fitted:
-            evaluation = self.score_chunk(X, actual)
+            evaluation = self.score_chunk(X, actual) # evaluate current chunk with existing model
         else:
             self.metrics._encode(actual, "y")
         previous_model = self.pipeline.steps[-1][1]
@@ -82,7 +82,7 @@ class StreamTrainer:
 
         try:
             start = perf_counter()
-            self.pipeline.partial_fit(X, actual)
+            self.pipeline.partial_fit(X, actual) # fill buffer of refit pipeline
             elapsed = perf_counter() - start
             _, peak = tracemalloc.get_traced_memory()
         finally:
@@ -93,6 +93,7 @@ class StreamTrainer:
             self.metrics.update(evaluation["y_true"], evaluation["y_pred"], evaluation["y_score"])
             self.last_evaluation = evaluation
 
+        # log after finish handling one chunk of data
         entry = {
             "chunk": len(self.logs) + 1,
             "n_samples": actual.size,
