@@ -7,7 +7,7 @@ from ._moments import _chunk_mean, _merge_means, updated_moments
 
 
 def _check_shape(X: np.ndarray, n_features: int | None, training: bool) -> None:
-    if X.ndim != 2 or X.shape[1] == 0:
+    if X.ndim != 2 or (X.shape[1] == 0 and n_features != 0):
         raise ValueError("Expected a 2D array with at least one feature.")
     if training and X.shape[0] == 0:
         raise ValueError("Cannot fit on an empty array.")
@@ -28,6 +28,11 @@ def _numeric_input(X: np.ndarray, n_features: int | None, training: bool) -> np.
         raise ValueError("Features must be finite or NaN.")
     
     return X
+
+
+def _append_columns(values: np.ndarray | None, extra: int, fill: int | float) -> np.ndarray:
+    new = np.full(extra, fill)
+    return new if values is None else np.concatenate((values, new))
 
 
 class StandardScaler(BaseTransformer):
@@ -54,6 +59,15 @@ class StandardScaler(BaseTransformer):
     def partial_fit(self, X: np.ndarray, y=None) -> StandardScaler:
         """Merge the statistics of a new chunk into the fitted state."""
         return self._update(X, reset=False)
+
+    def _extend_one_hot(self, n_features: int, previous_rows: int) -> None:
+        """Prepare running statistics for newly appended one-hot columns."""
+        extra = n_features - (self.n_features_in_ or 0)
+        self.n_samples_seen_ = _append_columns(self.n_samples_seen_, extra, previous_rows)
+        self.mean_ = _append_columns(self.mean_, extra, 0.0)
+        if self.with_std:
+            self.var_ = _append_columns(self.var_, extra, 0.0)
+        self.n_features_in_ = n_features
 
     def _update(self, X: np.ndarray, reset: bool) -> StandardScaler:
         X = _numeric_input(X, None if reset else self.n_features_in_, training=True)
@@ -120,6 +134,14 @@ class MinMaxScaler(BaseTransformer):
     def partial_fit(self, X: np.ndarray, y=None) -> MinMaxScaler:
         """Extend the per-feature extrema using a chunk of shape (N, D)."""
         return self._update(X, reset=False)
+
+    def _extend_one_hot(self, n_features: int, previous_rows: int) -> None:
+        """Treat a newly appended one-hot column as zero in earlier rows."""
+        extra = n_features - (self.n_features_in_ or 0)
+        initial = 0.0 if previous_rows else np.nan
+        self.data_min_ = _append_columns(self.data_min_, extra, initial)
+        self.data_max_ = _append_columns(self.data_max_, extra, initial)
+        self.n_features_in_ = n_features
 
     def _update(self, X: np.ndarray, reset: bool) -> MinMaxScaler:
         X = _numeric_input(X, None if reset else self.n_features_in_, training=True)
@@ -240,6 +262,7 @@ class OneHotEncoder(BaseTransformer):
         self.n_features_in_ = None
         self.categories_ = None
         self._family = None
+        self._n_rows_seen = 0
         self._output_columns: list[tuple[int, np.ndarray]] = []
 
     def fit(self, X: np.ndarray, y=None) -> OneHotEncoder:
@@ -290,6 +313,7 @@ class OneHotEncoder(BaseTransformer):
         self.n_features_in_ = X.shape[1]
         self.categories_ = categories
         self._family = family
+        self._n_rows_seen = X.shape[0] if reset else self._n_rows_seen + X.shape[0]
         self._output_columns = output_columns
 
         return self

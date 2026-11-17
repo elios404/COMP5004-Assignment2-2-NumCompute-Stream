@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from numcompute_stream.pipeline import Pipeline
-from numcompute_stream.preprocessing import OneHotEncoder, SimpleImputer, StandardScaler
+from numcompute_stream.preprocessing import MinMaxScaler, OneHotEncoder, SimpleImputer, StandardScaler
 from numcompute_stream.tree import DecisionTreeClassifier
 
 
@@ -44,6 +44,56 @@ def test_pipeline_pairs_encoder_columns_with_each_tree():
     pipe.partial_fit([["b"]], [1])
     assert pipe.named_steps["model"].n_features_in_ == 3
     np.testing.assert_array_equal(pipe.predict([["c"], ["b"]]), [2, 1])
+
+
+def test_pipeline_extends_scaler_after_encoder_discovers_a_category():
+    initial = [["a"], ["b"]]
+    all_rows = [*initial, ["c"], ["c"]]
+    for scaler_type in (StandardScaler, MinMaxScaler):
+        pipe = Pipeline([
+            ("encode", OneHotEncoder()),
+            ("scale", scaler_type()),
+            ("model", DecisionTreeClassifier(buffer_size=2)),
+        ]).fit(initial, [0, 1])
+
+        fitted_scaler = pipe.named_steps["scale"]
+        pipe.partial_fit([["c"]], [2])
+        assert pipe.named_steps["scale"] is fitted_scaler
+        assert fitted_scaler.n_features_in_ == 2
+        np.testing.assert_array_equal(pipe.predict(initial), [0, 1])
+
+        pipe.partial_fit([["c"]], [2])
+        assert pipe.named_steps["model"].n_features_in_ == 3
+        encoded = pipe.named_steps["encode"].transform(all_rows)
+        expected = scaler_type().fit_transform(encoded)
+        np.testing.assert_allclose(pipe.named_steps["scale"].transform(encoded), expected)
+        np.testing.assert_array_equal(pipe.predict([["c"]]), [2])
+
+
+def test_pipeline_accepts_zero_one_hot_columns_while_filling_the_buffer():
+    for scaler_type in (StandardScaler, MinMaxScaler):
+        pipe = Pipeline([
+            ("encode", OneHotEncoder(drop_first=True)),
+            ("scale", scaler_type()),
+            ("model", DecisionTreeClassifier(buffer_size=3)),
+        ])
+        pipe.partial_fit([["a"]], [0])
+        pipe.partial_fit([["a"]], [0])
+        assert not pipe.is_fitted
+
+        pipe.partial_fit([["b"]], [1])
+        X = [["a"], ["b"]]
+        expected = scaler_type().fit([[0.0], [0.0], [1.0]]).transform([[0.0], [1.0]])
+        np.testing.assert_allclose(pipe.named_steps["scale"].transform([[0.0], [1.0]]), expected)
+        np.testing.assert_array_equal(pipe.predict(X), [0, 1])
+
+
+def test_pipeline_does_not_add_zero_observations_to_the_first_one_hot_chunk():
+    pipe = Pipeline([("encode", OneHotEncoder()), ("scale", MinMaxScaler())])
+    pipe.partial_fit([["a"], ["a"]])
+
+    np.testing.assert_array_equal(pipe.named_steps["scale"].data_min_, [1.0])
+    np.testing.assert_array_equal(pipe.transform([["a"]]), [[0.0]])
 
 
 def test_pipeline_updates_transformers_in_order():

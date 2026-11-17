@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import copy, deepcopy
 from numbers import Integral
 from numcompute.pipeline import Pipeline as BatchPipeline
+from .preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 from .tree import DecisionTreeClassifier
 import numpy as np
 
@@ -15,6 +16,8 @@ class Pipeline(BatchPipeline):
     pipeline's copies. Buffered estimators expose a positive buffer_size and
     are fitted on a full window transformed with one preprocessing state.
     Other incremental steps are updated immediately via partial_fit.
+    A scaler directly after OneHotEncoder treats newly added columns as
+    zero for earlier rows.
     """
 
     def __init__(self, steps):
@@ -146,10 +149,17 @@ class Pipeline(BatchPipeline):
 
         candidate_steps = deepcopy(update_steps)
         transformed = X.copy()
+        previous_step = None
         for index, (_, step) in enumerate(candidate_steps):
+            if isinstance(previous_step, OneHotEncoder) and isinstance(step, (StandardScaler, MinMaxScaler)):
+                width = transformed.shape[1]
+                if step.n_features_in_ is None or width > step.n_features_in_:
+                    previous_rows = previous_step._n_rows_seen - transformed.shape[0]
+                    step._extend_one_hot(width, previous_rows)
             step.partial_fit(transformed, y)
             if buffered or index < len(candidate_steps) - 1:
                 transformed = step.transform(transformed)
+            previous_step = step
 
         if not buffered:
             self._commit_fit(candidate_steps, X.shape[1])
