@@ -1,233 +1,142 @@
-# COMP5004-Assignment2-NumCompute
+# COMP5004 Assignment 2.2 — NumCompute-Stream
 
-A modular, vectorised scientific computing and machine learning toolkit implemented from scratch using plain Python and NumPy.
+NumCompute-Stream extends the Assignment 2.1 NumCompute toolkit with streaming preprocessing, statistics, decision-tree classification and evaluation. It uses NumPy for computation and Matplotlib for visualisation.
 
 ## Project Structure
 
 ```text
-NumCompute/
-├── numcompute/
-│   ├── __init__.py
-│   ├── io.py              # CSV reader (streaming/chunking) and missing value handling
-│   ├── preprocessing.py   # StandardScaler, MinMaxScaler, SimpleImputer, OneHotEncoder
-│   ├── pipeline.py        # BaseTransformer, BaseEstimator, Pipeline, FeatureUnion
-│   ├── sort_search.py     # Sorts, Top-k, quickselect, binary_search
-│   ├── rank.py            # Ranking with tie-breaking and percentiles
-│   ├── stats.py           # Descriptive stats, Welford streaming stats, histogram, quantiles
-│   ├── optim.py           # Finite-difference gradients and Jacobians
-│   ├── metrics.py         # Classification & regression metrics, Confusion Matrix, ROC/AUC
-│   ├── utils.py           # Pairwise distances, stable softmax/logsumexp, batch_generator
-│   └── benchmarking.py    # Micro-benchmark harness and loop vs. NumPy comparisons
-├── tests/                 # Unit test suite covering core functionality and edge cases
+COMP5004-Assignment2-2-NumCompute-Stream/
+├── numcompute/                   # Assignment 2.1 package
+├── numcompute_stream/            # Assignment 2.2 package
+│   ├── __init__.py               # Package initialisation
+│   ├── _moments.py               # Shared calculations for running means and variances
+│   ├── preprocessing.py          # Incremental scaling, imputation and one-hot encoding
+│   ├── stats.py                  # Per-feature streaming statistics
+│   ├── tree.py                   # Decision tree and buffered retraining
+│   ├── pipeline.py               # Streaming preprocessing and model pipeline
+│   ├── metrics.py                # Cumulative and rolling classification metrics
+│   ├── stream.py                 # Chunk evaluation, training and logging
+│   └── visualise.py              # Metric, model comparison and prediction plots
+├── tests/                        # Assignment 2.1 and Assignment 2.2 unit tests
 ├── demo/
-│   └── quickstart.ipynb   # End-to-end demonstration notebook
+│   ├── stream_demo.ipynb         # Assignment 2.2 demonstration
+│   └── quickstart.ipynb          # Assignment 2.1 demonstration
 ├── benchmark/
-│   ├── run_benchmarks.py  # Reproducible benchmark script
-│   ├── results.csv        # Recorded benchmark timing outputs
-│   └── environment.txt    # Execution environment metadata
-├── pyproject.toml         # Package configuration
+│   ├── run_stream_benchmarks.py  # Assignment 2.2 benchmark script
+│   ├── stream_split_results.csv  # Assignment 2.2 split-search results
+│   ├── stream_buffer_results.csv # Assignment 2.2 buffer-size results
+│   ├── stream_environment.txt   # Assignment 2.2 benchmark environment
+│   ├── run_benchmarks.py         # Assignment 2.1 benchmark script
+│   ├── results.csv              # Assignment 2.1 benchmark results
+│   └── environment.txt          # Assignment 2.1 benchmark environment
+├── pyproject.toml                # Package configuration
 └── README.md
-
 ```
 
 ## Requirements
 
-* Python >= 3.11
-* NumPy
-* pytest (for running unit tests)
-
----
+- Python 3.10 or later
+- NumPy and Matplotlib
+- pytest and Jupyter for tests and the demo
 
 ## Setup & Installation
 
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/elios404/COMP5004-Assignment2-NumCompute.git](https://github.com/elios404/COMP5004-Assignment2-NumCompute.git)
-cd COMP5004-Assignment2-NumCompute
-
+git clone --branch sejun-stream https://github.com/elios404/COMP5004-Assignment2-2-NumCompute-Stream.git
+cd COMP5004-Assignment2-2-NumCompute-Stream
 ```
 
-### 2. Create and Activate Virtual Environment
+### 2. Create and Activate a Virtual Environment
 
-* **macOS / Linux:**
+**macOS / Linux**
+
 ```bash
-python3.11 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-
 ```
 
+**Windows (PowerShell)**
 
-* **Windows (PowerShell):**
 ```powershell
-py -3.11 -m venv .venv
+py -3 -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
-
 ```
 
+### 3. Install the Package
 
-
-### 3. Install Package
-
-Install `numcompute` in editable mode with development dependencies:
+Install `numcompute` in editable mode with development dependencies.
 
 ```bash
-pip install --upgrade pip
-pip install -e ".[dev]"
-
+python -m pip install -e ".[dev]"
 ```
-
----
 
 ## API Overview
 
-| Module | Key Functions / Classes | Purpose |
+| Module in `numcompute_stream` | Main API | Purpose |
 | --- | --- | --- |
-| `io.py` | `load_csv`, `load_csv_chunks` | Loads 2D numerical arrays from CSV files with missing-token parsing and chunk streaming. |
-| `preprocessing.py` | `SimpleImputer`, `StandardScaler`, `MinMaxScaler`, `OneHotEncoder` | Imputes missing values, scales numerical features, and one-hot encodes categorical columns. |
-| `pipeline.py` | `Pipeline`, `FeatureUnion`, `BaseTransformer`, `BaseEstimator` | Chains sequential transformations or merges parallel preprocessing steps under a unified `fit`/`transform` API. |
-| `sort_search.py` | `stable_sort`, `multi_key_sort`, `topk`, `quickselect`, `binary_search` | Performs stable sorting, $k$-th element selection, top-$k$ extraction, and binary search. |
-| `rank.py` | `rank`, `percentile` | Computes element ranks with configurable tie-breaking (`average`, `dense`, `ordinal`) and NaN-aware percentiles. |
-| `stats.py` | `mean`, `std`, `median`, `minimum`, `maximum`, `histogram`, `quantiles`, `WelfordStats` | Computes axis-aware descriptive statistics and maintains online streaming statistics via Welford's algorithm. |
-| `optim.py` | `grad`, `jacobian` | Estimates gradients for scalar functions and Jacobians for vector functions using forward or central finite differences. |
-| `metrics.py` | `accuracy`, `precision`, `recall`, `f1`, `confusion_matrix`, `mse`, `roc_curve`, `auc` | Evaluates binary/multiclass classification and regression predictions. |
-| `utils.py` | `euclidean_distance`, `cosine_similarity`, `softmax`, `logsumexp`, `batch_generator` | Provides pairwise distance matrices, numerically stable activations, and mini-batch data iteration. |
-| `benchmarking.py` | `benchmark`, `compare_implementations` | Measures execution times and computes speedup ratios between loop-based and vectorised implementations. |
-
----
-
-## Usage Examples
-
-### 1. Data Loading & Preprocessing Pipeline
-
-```python
-import numpy as np
-from numcompute.preprocessing import SimpleImputer, StandardScaler, OneHotEncoder
-from numcompute.pipeline import Pipeline
-
-# Sample numerical data with missing values
-X_num = np.array([[10.0, np.nan], [20.0, 4.0], [30.0, 6.0]])
-
-num_pipe = Pipeline([
-    ("imputer", SimpleImputer(strategy="mean")),
-    ("scaler", StandardScaler())
-])
-X_num_scaled = num_pipe.fit_transform(X_num)
-
-# Categorical encoding
-X_cat = np.array([[0], [1], [2]])
-encoder = OneHotEncoder(drop_first=True)
-X_cat_encoded = encoder.fit_transform(X_cat)
-
-```
-
-### 2. Descriptive & Streaming Statistics
-
-```python
-import numpy as np
-from numcompute.stats import mean, std, quantiles, WelfordStats
-
-data = np.array([2.0, 4.0, 6.0, 8.0])
-print("Mean:", mean(data))
-print("Std:", std(data))
-print("Quantiles:", quantiles(data, [0.25, 0.5, 0.75]))
-
-# Streaming updates with Welford's algorithm
-stream = WelfordStats()
-stream.update([2.0, 4.0])
-stream.update([6.0, 8.0])
-print("Streaming Mean:", stream.mean_)
-print("Streaming Variance:", stream.variance)
-
-```
-
-### 3. Sorting, Ranking & Numerical Optimization
-
-```python
-import numpy as np
-from numcompute.sort_search import topk, binary_search, stable_sort
-from numcompute.rank import rank
-from numcompute.optim import grad, jacobian
-
-arr = np.array([10.0, 30.0, 20.0, 30.0])
-vals, idx = topk(arr, k=2, largest=True)
-ranks = rank(arr, method="average")
-
-# Finite-difference Gradient & Jacobian
-f = lambda x: x[0]**2 + 3 * x[0] * x[1]
-F = lambda x: np.array([x[0]**2 + x[1], x[0] * x[1]])
-
-x0 = np.array([2.0, 3.0])
-print("Gradient:", grad(f, x0, method="central"))
-print("Jacobian:\n", jacobian(F, x0, method="central"))
-
-```
-
-### 4. Metrics & Numerical Utilities
-
-```python
-import numpy as np
-from numcompute.metrics import accuracy, f1, mse
-from numcompute.utils import euclidean_distance, softmax
-
-y_true = np.array([0, 1, 1, 0])
-y_pred = np.array([0, 1, 0, 0])
-print("Accuracy:", accuracy(y_true, y_pred))
-print("F1 Score:", f1(y_true, y_pred))
-
-scores = np.array([1000.0, 1001.0, 1002.0])
-print("Stable Softmax:", softmax(scores))
-
-```
-
----
+| `preprocessing.py` | `StandardScaler`, `MinMaxScaler`, `SimpleImputer`, `OneHotEncoder` | Learn preprocessing state from chunks with `partial_fit()` and apply it with `transform()`. |
+| `stats.py` | `StreamingStats` | Update per-feature counts, means and variances. Supports fixed-bin histograms and exact quantiles with retained history. |
+| `tree.py` | `DecisionTreeClassifier` | Train with `fit()` or retrain when the `partial_fit()` buffer fills. Predict labels or class probabilities. |
+| `pipeline.py` | `Pipeline` | Chain preprocessing and classification, and update the fitted pipeline when enough rows are buffered. |
+| `metrics.py` | `StreamingMetrics` | Accumulate classification metrics and optionally report them over a rolling window. |
+| `stream.py` | `StreamTrainer` | Evaluate each chunk with the current fitted model before updating the pipeline. Record scores, retraining, update time and peak traced memory. |
+| `visualise.py` | `plot_metric_over_time()`, `compare_models()`, `plot_predictions_vs_ground_truth()` | Plot chunk metrics, compare runs and show predictions against true labels. |
 
 ## Testing & Demonstration
 
-### Run Unit Tests
-
-Execute the full automated test suite from the project root:
+Run the full test suite from the repository root.
 
 ```bash
-pytest -v
-
+python -m pytest -v
 ```
 
-### Run End-to-End Demo
-
-Open and run `demo/quickstart.ipynb` in Jupyter Notebook or VS Code to view the complete workflow from CSV generation to benchmarking:
+To run the tests for the Assignment 2.2 modules, including tree and visualisation tests, use the following command.
 
 ```bash
-jupyter notebook demo/quickstart.ipynb
-
+python -m pytest -v tests/test_tree.py tests/test_stream_preprocessing.py tests/test_stream_stats.py tests/test_stream_pipeline.py tests/test_stream_metrics.py tests/test_stream_trainer.py tests/test_visualise.py
 ```
 
-### Run Reproducible Benchmarks
-
-Execute the standalone benchmark script to regenerate `benchmark/results.csv` and `benchmark/environment.txt`:
+Open the Assignment 2.2 notebook from the repository root and run all cells using the project Python kernel.
 
 ```bash
-python benchmark/run_benchmarks.py
-
+jupyter notebook demo/stream_demo.ipynb
 ```
 
----
+The notebook generates a reproducible CSV with missing feature values and a fixed label rule. It reads the CSV in 40-row chunks and feeds the same chunks to two pipelines with 80- and 160-row buffers. The output shows when each tree retrains, the evaluation and update logs, chunk accuracy for both buffers, and the latest chunk's predictions against its true labels.
 
-## Benchmark Performance (Python Loops vs. NumPy)
+## Streaming Benchmarks
 
-Measured using `benchmark/run_benchmarks.py` with a fixed random seed (`42`), averaged over 5 repetitions of 10 calls per operation.
+Run the benchmark from the repository root to regenerate both results CSVs and the environment record in `benchmark/`.
 
-| Operation | Input Size | Loop (ms) | NumPy (ms) | Speedup |
-| --- | --- | --- | --- | --- |
-| **MSE** | 1,000 | 0.3035 | 0.0173 | 17.56x |
-| **MSE** | 10,000 | 5.2451 | 0.0682 | 76.92x |
-| **MSE** | 100,000 | 27.3947 | 3.0458 | 8.99x |
-| **Euclidean Distance** | 20 × 20 (8 features) | 2.0718 | 0.0717 | 28.91x |
-| **Euclidean Distance** | 50 × 50 (8 features) | 8.4105 | 0.2541 | 33.10x |
-| **Euclidean Distance** | 100 × 100 (8 features) | 35.9366 | 0.9685 | 37.11x |
-| **Softmax** | 1,000 | 0.3847 | 0.0219 | 17.54x |
-| **Softmax** | 10,000 | 3.0728 | 0.0926 | 33.20x |
-| **Softmax** | 100,000 | 32.5353 | 1.5731 | 20.68x |
+```bash
+python benchmark/run_stream_benchmarks.py
+```
 
-*Execution environment: Python 3.14.7; NumPy 2.5.4; Windows 11 (10.0.26200); AMD64.*
+Both experiments use a synthetic binary stream of 1,280 rows with six features and seed 42. The decision boundary changes halfway through the stream. The recorded environment is macOS (ARM64), Python 3.11.15 and NumPy 2.4.6. See [stream_environment.txt](benchmark/stream_environment.txt) for the full settings.
+
+### Gini Split Search (Python Loops vs NumPy)
+
+The script verifies that the implementations agree on the selected feature, threshold and gain before timing. Both use NumPy for sorting. The loop implementation evaluates candidate splits one at a time, and the vectorised implementation evaluates them in arrays. Times are mean milliseconds per search at one tree node, measured over five repetitions of ten calls per window. Speedup is the loop time divided by the vectorised time.
+
+| Rows per window | Windows | Python loop (ms) | Vectorised NumPy (ms) | Speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 80 | 16 | 0.559430 | 0.394883 | 1.417× |
+| 160 | 8 | 0.677354 | 0.330304 | 2.051× |
+| 320 | 4 | 1.352802 | 0.458624 | 2.950× |
+
+The measured speedup increased with window size, reaching 2.950× at 320 rows. [Raw split-search results](benchmark/stream_split_results.csv)
+
+### Buffer Size Comparison
+
+Each pipeline receives 40-row chunks and uses a tree with maximum depth 4. Accuracy is measured on the same 960 rows for all three settings, covering chunks 9 to 32. Fit counts include the initial fit. Update time is the median across updates that fitted a tree over five stream runs. It includes preprocessing and buffering with memory tracing enabled. Evaluation runs before the timed update.
+
+| Buffer (rows) | First evaluated chunk | Fits per run | Common evaluated rows | Accuracy | Median fit update (ms) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 80 | 3 | 16 | 960 | 87.29% | 10.530271 |
+| 160 | 5 | 8 | 960 | 87.50% | 14.934229 |
+| 320 | 9 | 4 | 960 | 81.67% | 18.510812 |
+
+Larger buffers delayed the first evaluation, reduced the number of fits and increased the median fit update time. The 80- and 160-row buffers differed by two correct predictions over the same 960 rows. The 320-row buffer had the lowest accuracy on this stream. [Raw buffer-size results](benchmark/stream_buffer_results.csv)
